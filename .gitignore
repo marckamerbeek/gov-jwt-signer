@@ -1,0 +1,28 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test- en coveragebestanden
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# Sleutels en geheimen (mogen nooit in git)
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editor/OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
