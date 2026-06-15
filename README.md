@@ -1,84 +1,83 @@
 # gloo-gateway-extauth-sec
 
-Een Go-securitymodule voor het ondertekenen van JSON Web Tokens (JWT's) binnen
-custom ExtAuth-services achter Gloo Gateway. De module geeft tokenvarianten uit
-die in de basis identiek zijn (zelfde header, zelfde registered claims, zelfde
-ondertekening) en uitsluitend in hun domeinspecifieke claims verschillen. Drie
-varianten zitten ingebouwd:
+A Go security module for signing JSON Web Tokens (JWTs) inside custom ExtAuth
+services behind Gloo Gateway. The module issues token variants that are identical
+at their core (same header, same registered claims, same signing) and differ only
+in their domain-specific claims. Three variants are built in:
 
-- **eIDAS** — de Europese standaard voor grensoverschrijdende authenticatie
-- **DigiD** — authenticatie van burgers (Logius)
-- **eHerkenning** — authenticatie van organisaties en handelende personen
+- **eIDAS** — the European standard for cross-border authentication
+- **DigiD** — citizen authentication (Logius)
+- **eHerkenning** — authentication of organisations and acting persons
 
-Daarnaast kunnen consumers van deze library hun **eigen tokentype** definiëren
-via `IssueCustom`, zonder de library aan te passen. Zo blijft de module vrij van
-organisatiespecifieke varianten (zie [Custom tokentype](#custom-tokentype)).
+In addition, consumers of this library can define their **own token type** via
+`IssueCustom`, without modifying the library. This keeps the module free of
+organisation-specific variants (see [Custom token type](#custom-token-type)).
 
-De module is opgezet rond bestaande standaarden en met een minimaal
-supply-chain-oppervlak: de enige externe afhankelijkheid is
-[`golang-jwt/jwt/v5`](https://github.com/golang-jwt/jwt). JWK, JWKS en de
-RFC 7638-thumbprint zijn met de standaardbibliotheek geïmplementeerd.
+The module is built around existing standards and with a minimal supply-chain
+surface: the only external dependency is
+[`golang-jwt/jwt/v5`](https://github.com/golang-jwt/jwt). JWK, JWKS and the
+RFC 7638 thumbprint are implemented with the standard library.
 
-## Standaarden
+## Standards
 
-| Onderwerp | Standaard |
-|-----------|-----------|
+| Topic | Standard |
+|-------|----------|
 | JWT | RFC 7519 |
-| JWS (ondertekening) | RFC 7515 |
+| JWS (signing) | RFC 7515 |
 | JWK / JWKS | RFC 7517 |
-| Algoritmen | RFC 7518 |
+| Algorithms | RFC 7518 |
 | JWK Thumbprint (kid) | RFC 7638 |
 | Authentication Method References (amr) | RFC 8176 |
-| eIDAS minimum data set | eIDAS SAML Attribute Profile (Verordening (EU) 910/2014) |
-| Betrouwbaarheidsniveaus (acr) | eIDAS LoA low/substantial/high |
+| eIDAS minimum data set | eIDAS SAML Attribute Profile (Regulation (EU) 910/2014) |
+| Assurance levels (acr) | eIDAS LoA low/substantial/high |
 | eHerkenning | Afsprakenstelsel eToegang |
 
-Het standaardalgoritme is **RS256**, conform de baseline van het NL GOV Assurance
-profile voor OAuth 2.0. Via `WithAlgorithm` kan worden gewisseld naar onder andere
-PS256 of ES256.
+The default algorithm is **RS256**, in line with the baseline of the NL GOV
+Assurance profile for OAuth 2.0. Use `WithAlgorithm` to switch to, among others,
+PS256 or ES256.
 
-## Architectuur
+## Architecture
 
-De module is in lagen opgebouwd zodat de domeinmodellen losstaan van de
-JOSE-implementatie:
+The module is layered so that the domain models are decoupled from the JOSE
+implementation:
 
 ```
-extauthsec/                rootpackage: Signer, Verifier, sleutel- en JWKS-logica
-├── pkg/claims/            typed claim-structs + betrouwbaarheidsniveaus (geen externe deps)
-└── pkg/token/             Service die per variant claims samenstelt en ondertekent
+extauthsec/                root package: Signer, Verifier, key and JWKS logic
+├── pkg/claims/            typed claim structs + assurance levels (no external deps)
+└── pkg/token/             Service that assembles and signs claims per variant
 ```
 
-- `extauthsec.Signer` — onveranderlijk en concurrency-safe; ondertekent een
-  willekeurige `jwt.Claims` en publiceert de bijbehorende JWKS.
-- `extauthsec.Verifier` — valideert uitgegeven tokens (kid-matching,
-  algoritme-allowlist tegen algorithm-confusion, exp/nbf, iss/aud). Bedoeld voor
-  zelftest en lichte verificatie; productie-verifiers in andere diensten gebruiken
-  hun eigen JOSE-bibliotheek.
-- `pkg/token.Service` — biedt per ingebouwde variant een `Issue...`-methode plus
-  het generieke `IssueCustom` voor eigen tokentypes.
+- `extauthsec.Signer` — immutable and concurrency-safe; signs an arbitrary
+  `jwt.Claims` and publishes the corresponding JWKS.
+- `extauthsec.Verifier` — validates issued tokens (kid matching, algorithm
+  allowlist against algorithm confusion, exp/nbf, iss/aud). Intended for
+  self-testing and lightweight verification; production verifiers in other
+  services use their own JOSE library.
+- `pkg/token.Service` — provides an `Issue...` method per built-in variant plus
+  the generic `IssueCustom` for custom token types.
 
-### Claim-indeling
+### Claim layout
 
-De OIDC-standaardclaims staan op het hoogste niveau (`iss`, `sub`, `aud`, `exp`,
-`nbf`, `iat`, `jti`, en waar van toepassing `acr`, `amr`, `auth_time`). De
-variantspecifieke gegevens staan genest onder een eigen sleutel (`eidas`,
-`digid`, `eherkenning`, of bij een custom variant een door de consumer gekozen
-sleutel). De private claim `token_type` benoemt het tokentype expliciet.
+The OIDC standard claims live at the top level (`iss`, `sub`, `aud`, `exp`,
+`nbf`, `iat`, `jti`, and where applicable `acr`, `amr`, `auth_time`). The
+variant-specific data is nested under its own key (`eidas`, `digid`,
+`eherkenning`, or for a custom variant a key chosen by the consumer). The private
+claim `token_type` names the token type explicitly.
 
-De naam van die claim is configureerbaar via `WithTokenTypeClaim` (standaard
-`token_type`), zodat organisaties hun eigen collision-resistant namespace
-(RFC 7519 §4.3) kunnen gebruiken, bijvoorbeeld `example_token_type`.
+The name of that claim is configurable via `WithTokenTypeClaim` (default
+`token_type`), so organisations can use their own collision-resistant namespace
+(RFC 7519 §4.3), for example `example_token_type`.
 
-De `acr`-claim wordt gevuld met de eIDAS LoA-URI: direct bij eIDAS, afgeleid bij
-DigiD en eHerkenning (zie de `EIDAS()`-mappings). Bij een custom variant bepaalt
-de consumer zelf de `acr`-waarde (optioneel).
+The `acr` claim is filled with the eIDAS LoA URI: directly for eIDAS, derived for
+DigiD and eHerkenning (see the `EIDAS()` mappings). For a custom variant the
+consumer determines the `acr` value (optional).
 
-### Custom tokentype
+### Custom token type
 
-Een applicatie die deze library gebruikt kan een eigen tokentype uitgeven zonder
-de library te wijzigen. De payload is een gewone struct die de consumer zelf
-bezit; implementeert die een `Validate() error`, dan wordt die vóór ondertekening
-aangeroepen. De `ClaimsKey` mag niet botsen met een gereserveerde claim.
+An application that uses this library can issue its own token type without
+modifying the library. The payload is an ordinary struct owned by the consumer;
+if it implements `Validate() error`, that is called before signing. The
+`ClaimsKey` must not collide with a reserved claim.
 
 ```go
 type AcmeClaims struct {
@@ -88,29 +87,29 @@ type AcmeClaims struct {
 
 func (p AcmeClaims) Validate() error {
 	if p.EmployeeID == "" {
-		return errors.New("employee_id ontbreekt")
+		return errors.New("employee_id is missing")
 	}
 	return nil
 }
 
 jwt, err := svc.IssueCustom(token.CustomRequest{
 	CommonRequest: token.CommonRequest{Subject: "emp-00421", Audience: []string{"acme-portal-api"}},
-	Type:          "acme-portal", // waarde van de token_type-claim
-	ClaimsKey:     "acme-portal", // sleutel waaronder de payload genest wordt
-	ACR:           "",            // optioneel
-	Claims:        AcmeClaims{EmployeeID: "00421", Roles: []string{"beheerder"}},
+	Type:          "acme-portal", // value of the token_type claim
+	ClaimsKey:     "acme-portal", // key under which the payload is nested
+	ACR:           "",            // optional
+	Claims:        AcmeClaims{EmployeeID: "00421", Roles: []string{"admin"}},
 })
 ```
 
-## Installatie
+## Installation
 
 ```sh
 go get github.com/jwt-extauth/gloo-gateway-extauth-sec
 ```
 
-Vereist Go 1.22 of nieuwer.
+Requires Go 1.22 or newer.
 
-## Gebruik
+## Usage
 
 ```go
 package main
@@ -128,7 +127,7 @@ func main() {
 	signer, err := extauthsec.NewSigner(
 		extauthsec.WithIssuer("https://extauth.example.org"),
 		extauthsec.WithSigningKeyFile("/etc/extauth/signing-key.pem"),
-		// extauthsec.WithAlgorithm(extauthsec.PS256), // optioneel
+		// extauthsec.WithAlgorithm(extauthsec.PS256), // optional
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -142,7 +141,7 @@ func main() {
 	jwt, err := svc.IssueEIDAS(token.EIDASRequest{
 		CommonRequest: token.CommonRequest{
 			Subject:  "NL/NL/123456789",
-			Audience: []string{"urn:dienst:afnemer"},
+			Audience: []string{"urn:service:consumer"},
 			AMR:      []string{"pwd", "mfa"},
 		},
 		LoA: claims.LoAHigh,
@@ -158,46 +157,46 @@ func main() {
 	}
 	fmt.Println(jwt)
 
-	// Publiceer de JWKS op het bekende endpoint.
+	// Publish the JWKS at the well-known endpoint.
 	jwksJSON, _ := signer.JWKSJSON()
 	fmt.Println(string(jwksJSON))
 }
 ```
 
-Een volledig werkend voorbeeld dat de drie ingebouwde varianten plus een custom
-variant uitgeeft, de JWKS toont en een token verifieert staat in
+A complete working example that issues the three built-in variants plus a custom
+variant, prints the JWKS and verifies a token can be found in
 [`examples/basic`](examples/basic/main.go):
 
 ```sh
 go run ./examples/basic
 ```
 
-## Sleutelbeheer
+## Key management
 
-- Lever de private sleutel als PEM aan via `WithSigningKeyPEM` (bytes) of
-  `WithSigningKeyFile` (pad). PKCS#8, PKCS#1 en SEC1 worden ondersteund.
-- De `kid` wordt standaard berekend als de RFC 7638-thumbprint van de publieke
-  sleutel, zodat sleutelrotatie eenduidig en cache-vriendelijk verloopt. Met
-  `WithKeyID` kan een eigen `kid` worden opgegeven.
-- Publiceer `signer.JWKS()` / `signer.JWKSJSON()` op een JWKS-endpoint zodat
-  afnemers de handtekening kunnen valideren.
+- Provide the private key as PEM via `WithSigningKeyPEM` (bytes) or
+  `WithSigningKeyFile` (path). PKCS#8, PKCS#1 and SEC1 are supported.
+- By default the `kid` is computed as the RFC 7638 thumbprint of the public key,
+  so key rotation is unambiguous and cache-friendly. Use `WithKeyID` to supply
+  your own `kid`.
+- Publish `signer.JWKS()` / `signer.JWKSJSON()` on a JWKS endpoint so consumers
+  can validate the signature.
 
-## Ontwikkeling
+## Development
 
 ```sh
-make build     # compileren
-make test      # tests met race detector en coverage
+make build     # compile
+make test      # tests with the race detector and coverage
 make vet       # go vet
-make lint      # golangci-lint (indien geïnstalleerd)
+make lint      # golangci-lint (if installed)
 make vuln      # govulncheck
 make tidy      # go mod tidy
 ```
 
-## Beveiliging
+## Security
 
-Zie [SECURITY.md](SECURITY.md) voor het melden van kwetsbaarheden en de
-beveiligingsuitgangspunten van deze module.
+See [SECURITY.md](SECURITY.md) for reporting vulnerabilities and the security
+principles of this module.
 
-## Licentie
+## License
 
-Uitgebracht onder de **EUPL-1.2**. Zie [LICENSE](LICENSE).
+Released under the **EUPL-1.2**. See [LICENSE](LICENSE).

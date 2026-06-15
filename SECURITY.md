@@ -1,36 +1,35 @@
-# Beveiliging
+# Security
 
-## Kwetsbaarheden melden
+## Reporting vulnerabilities
 
-Meld vermoedelijke kwetsbaarheden niet via een publieke issue, maar via het
-private security-kanaal van de maintainers (zie de repository-instellingen voor
-"Report a vulnerability"). Geef waar mogelijk een reproduceerbaar scenario en de
-impact mee. Je ontvangt zo snel mogelijk een bevestiging van ontvangst.
+Do not report suspected vulnerabilities via a public issue, but via the
+maintainers' private security channel (see the repository settings for "Report a
+vulnerability"). Where possible, include a reproducible scenario and the impact.
+You will receive an acknowledgement of receipt as soon as possible.
 
-## Uitgangspunten
+## Principles
 
-Deze module is bewust ontworpen met een klein aanvalsoppervlak:
+This module is deliberately designed with a small attack surface:
 
-- **Minimale afhankelijkheden.** De enige externe dependency is
-  `github.com/golang-jwt/jwt/v5`. JWK, JWKS en de RFC 7638-thumbprint zijn met de
-  Go-standaardbibliotheek geïmplementeerd. Dit beperkt de supply-chain-risico's.
-- **Algorithm-confusion-bescherming.** De `Verifier` hanteert een
-  algoritme-allowlist op basis van de JWKS. Tokens met `alg: none` of een afwijkend
-  algoritme worden geweigerd.
-- **Sleutel- en algoritmecontrole.** Bij het aanmaken van een `Signer` wordt
-  gecontroleerd dat het sleuteltype past bij het gekozen algoritme (RSA bij RS*/PS*,
-  EC bij ES*).
-- **Veilige defaults.** RS256 als baseline (NL GOV Assurance profile), verplichte
-  `exp`, en een `jti` met 128 bits cryptografische entropie per token.
+- **Minimal dependencies.** The only external dependency is
+  `github.com/golang-jwt/jwt/v5`. JWK, JWKS and the RFC 7638 thumbprint are
+  implemented with the Go standard library. This limits supply-chain risks.
+- **Algorithm-confusion protection.** The `Verifier` uses an algorithm allowlist
+  based on the JWKS. Tokens with `alg: none` or a deviating algorithm are
+  rejected.
+- **Key and algorithm checks.** When creating a `Signer`, it is verified that the
+  key type matches the chosen algorithm (RSA for RS*/PS*, EC for ES*).
+- **Safe defaults.** RS256 as the baseline (NL GOV Assurance profile), a required
+  `exp`, and a `jti` with 128 bits of cryptographic entropy per token.
 
-## Sleutelbeheer
+## Key management
 
-Private sleutels horen niet in de repository thuis. Lever ze via een secret store
-of gemounte file aan (`WithSigningKeyFile` / `WithSigningKeyPEM`). De `.gitignore`
-sluit veelvoorkomende sleutelextensies uit als extra vangnet.
+Private keys do not belong in the repository. Provide them via a secret store or
+a mounted file (`WithSigningKeyFile` / `WithSigningKeyPEM`). The `.gitignore`
+excludes common key extensions as an extra safety net.
 
-## Geondersteunde versies
+## Supported versions
 
-Beveiligingsupdates worden geleverd voor de meest recente minor-release. Houd de
-Go-toolchain en `golang-jwt/jwt/v5` actueel; de CI draait `govulncheck` en een
-Trivy-scan op elke push en pull request.
+Security updates are provided for the most recent minor release. Keep the Go
+toolchain and `golang-jwt/jwt/v5` up to date; CI runs `govulncheck` and a Trivy
+scan on every push and pull request.
