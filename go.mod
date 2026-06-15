@@ -1,4 +1,4 @@
-module github.com/cjib/gloo-gateway-extauth-sec
+module github.com/jwt-extauth/gloo-gateway-extauth-sec
 
 go 1.22
 

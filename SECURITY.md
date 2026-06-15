@@ -2,8 +2,9 @@
 
 ## Kwetsbaarheden melden
 
-Meld vermoedelijke kwetsbaarheden niet via een publieke issue, maar via het interne
-security-kanaal van CJIB. Geef waar mogelijk een reproduceerbaar scenario en de
+Meld vermoedelijke kwetsbaarheden niet via een publieke issue, maar via het
+private security-kanaal van de maintainers (zie de repository-instellingen voor
+"Report a vulnerability"). Geef waar mogelijk een reproduceerbaar scenario en de
 impact mee. Je ontvangt zo snel mogelijk een bevestiging van ontvangst.
 
 ## Uitgangspunten

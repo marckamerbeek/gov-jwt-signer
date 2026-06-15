@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	extauthsec "github.com/cjib/gloo-gateway-extauth-sec"
-	"github.com/cjib/gloo-gateway-extauth-sec/pkg/claims"
-	"github.com/cjib/gloo-gateway-extauth-sec/pkg/token"
+	extauthsec "github.com/jwt-extauth/gloo-gateway-extauth-sec"
+	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/claims"
+	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/token"
 )
 
-const testIssuer = "https://extauth.cjib.nl"
+const testIssuer = "https://extauth.example.org"
 
 // newTestService builds a Signer with a fresh RSA key and a Service around it,
 // plus a Verifier based on the corresponding JWKS.
@@ -73,8 +73,8 @@ func assertBaseClaims(t *testing.T, c map[string]any, wantType string) {
 	if c["sub"] != "subject-123" {
 		t.Errorf("sub = %v", c["sub"])
 	}
-	if c["cjib_token_type"] != wantType {
-		t.Errorf("cjib_token_type = %v, verwacht %v", c["cjib_token_type"], wantType)
+	if c["token_type"] != wantType {
+		t.Errorf("token_type = %v, verwacht %v", c["token_type"], wantType)
 	}
 	for _, claim := range []string{"exp", "nbf", "iat", "jti", "aud"} {
 		if _, ok := c[claim]; !ok {
@@ -83,11 +83,29 @@ func assertBaseClaims(t *testing.T, c map[string]any, wantType string) {
 	}
 }
 
-func TestIssueMedewerkersportaal(t *testing.T) {
+// acmeClaims is a consumer-defined payload used to exercise IssueCustom.
+type acmeClaims struct {
+	EmployeeID string   `json:"employee_id"`
+	Roles      []string `json:"roles,omitempty"`
+}
+
+func (p acmeClaims) Validate() error {
+	if p.EmployeeID == "" {
+		return errMissingEmployeeID
+	}
+	return nil
+}
+
+var errMissingEmployeeID = errors.New("employee_id ontbreekt")
+
+func TestIssueCustom(t *testing.T) {
 	svc, verifier := newTestService(t)
-	tok, err := svc.IssueMedewerkersportaal(token.MedewerkersportaalRequest{
+	tok, err := svc.IssueCustom(token.CustomRequest{
 		CommonRequest: common(),
-		Claims: claims.Medewerkersportaal{
+		Type:          "acme-portal",
+		ClaimsKey:     "acme-portal",
+		ACR:           "urn:example:loa:internal",
+		Claims: acmeClaims{
 			EmployeeID: "EMP-007",
 			Roles:      []string{"beheerder"},
 		},
@@ -99,12 +117,58 @@ func TestIssueMedewerkersportaal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verificatie: %v", err)
 	}
-	assertBaseClaims(t, c, "medewerkersportaal")
-	if _, ok := c["medewerkersportaal"]; !ok {
-		t.Error("medewerkersportaal-object ontbreekt")
+	assertBaseClaims(t, c, "acme-portal")
+	if c["acr"] != "urn:example:loa:internal" {
+		t.Errorf("acr = %v, verwacht custom waarde", c["acr"])
+	}
+	obj, ok := c["acme-portal"].(map[string]any)
+	if !ok {
+		t.Fatalf("acme-portal-object ontbreekt of heeft verkeerd type: %T", c["acme-portal"])
+	}
+	if obj["employee_id"] != "EMP-007" {
+		t.Errorf("employee_id = %v", obj["employee_id"])
 	}
 	if _, ok := c["eidas"]; ok {
 		t.Error("eidas-object zou afwezig moeten zijn")
+	}
+}
+
+func TestIssueCustomValidations(t *testing.T) {
+	svc, _ := newTestService(t)
+
+	// Missing Type.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), ClaimsKey: "x", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrMissingTokenType) {
+		t.Fatalf("verwacht ErrMissingTokenType, kreeg %v", err)
+	}
+
+	// Claims without ClaimsKey.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrMissingClaimsKey) {
+		t.Fatalf("verwacht ErrMissingClaimsKey, kreeg %v", err)
+	}
+
+	// ClaimsKey collides with a reserved claim.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", ClaimsKey: "iss", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrReservedClaimsKey) {
+		t.Fatalf("verwacht ErrReservedClaimsKey voor 'iss', kreeg %v", err)
+	}
+
+	// ClaimsKey collides with the token-type claim.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", ClaimsKey: "token_type", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrReservedClaimsKey) {
+		t.Fatalf("verwacht ErrReservedClaimsKey voor token-type-claim, kreeg %v", err)
+	}
+
+	// Payload Validate() is honoured.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", ClaimsKey: "acme-portal", Claims: acmeClaims{},
+	}); !errors.Is(err, errMissingEmployeeID) {
+		t.Fatalf("verwacht validatiefout van payload, kreeg %v", err)
 	}
 }
 
@@ -194,8 +258,10 @@ func TestIssueEHerkenning(t *testing.T) {
 
 func TestIssueRequiresSubject(t *testing.T) {
 	svc, _ := newTestService(t)
-	_, err := svc.IssueMedewerkersportaal(token.MedewerkersportaalRequest{
-		Claims: claims.Medewerkersportaal{EmployeeID: "EMP-1"},
+	_, err := svc.IssueCustom(token.CustomRequest{
+		Type:      "acme-portal",
+		ClaimsKey: "acme-portal",
+		Claims:    acmeClaims{EmployeeID: "EMP-1"},
 	})
 	if !errors.Is(err, claims.ErrMissingSubject) {
 		t.Fatalf("verwacht ErrMissingSubject, kreeg %v", err)
@@ -218,12 +284,14 @@ func TestIssueValidatesVariantClaims(t *testing.T) {
 func TestVariantsShareIdenticalBase(t *testing.T) {
 	svc, verifier := newTestService(t)
 
-	mtok, err := svc.IssueMedewerkersportaal(token.MedewerkersportaalRequest{
+	mtok, err := svc.IssueCustom(token.CustomRequest{
 		CommonRequest: common(),
-		Claims:        claims.Medewerkersportaal{EmployeeID: "EMP-1"},
+		Type:          "acme-portal",
+		ClaimsKey:     "acme-portal",
+		Claims:        acmeClaims{EmployeeID: "EMP-1"},
 	})
 	if err != nil {
-		t.Fatalf("medewerker uitgifte: %v", err)
+		t.Fatalf("custom uitgifte: %v", err)
 	}
 	dtok, err := svc.IssueDigiD(token.DigiDRequest{
 		CommonRequest: common(),
@@ -235,7 +303,7 @@ func TestVariantsShareIdenticalBase(t *testing.T) {
 
 	mc, err := verifier.Verify(mtok)
 	if err != nil {
-		t.Fatalf("medewerker verificatie: %v", err)
+		t.Fatalf("custom verificatie: %v", err)
 	}
 	dc, err := verifier.Verify(dtok)
 	if err != nil {

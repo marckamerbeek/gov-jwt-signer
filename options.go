@@ -6,18 +6,21 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/claims"
 )
 
 // Option configures a Signer via NewSigner.
 type Option func(*config) error
 
 type config struct {
-	issuer     string
-	algorithm  Algorithm
-	keyPEM     []byte
-	keyID      string
-	defaultTTL time.Duration
-	now        func() time.Time
+	issuer         string
+	algorithm      Algorithm
+	keyPEM         []byte
+	keyID          string
+	defaultTTL     time.Duration
+	now            func() time.Time
+	tokenTypeClaim string
 }
 
 func defaultConfig() *config {
@@ -25,9 +28,10 @@ func defaultConfig() *config {
 		// RS256 is the baseline of the NL GOV Assurance profile for OAuth 2.0 and
 		// offers the broadest interoperability within government chains. Override
 		// with WithAlgorithm (PS256 for extra hardening).
-		algorithm:  RS256,
-		defaultTTL: 5 * time.Minute,
-		now:        time.Now,
+		algorithm:      RS256,
+		defaultTTL:     5 * time.Minute,
+		now:            time.Now,
+		tokenTypeClaim: claims.DefaultTokenTypeClaim,
 	}
 }
 
@@ -93,6 +97,20 @@ func WithDefaultTTL(ttl time.Duration) Option {
 			return fmt.Errorf("extauthsec: TTL moet positief zijn")
 		}
 		c.defaultTTL = ttl
+		return nil
+	}
+}
+
+// WithTokenTypeClaim overrides the name of the private claim that carries the
+// token type. It defaults to claims.DefaultTokenTypeClaim ("token_type").
+// Set it to your own collision-resistant namespace (RFC 7519 §4.3) to avoid
+// collisions with other claims, e.g. WithTokenTypeClaim("example_token_type").
+func WithTokenTypeClaim(name string) Option {
+	return func(c *config) error {
+		if name == "" {
+			return fmt.Errorf("extauthsec: token-type-claim mag niet leeg zijn")
+		}
+		c.tokenTypeClaim = name
 		return nil
 	}
 }

@@ -1,14 +1,18 @@
 # gloo-gateway-extauth-sec
 
 Een Go-securitymodule voor het ondertekenen van JSON Web Tokens (JWT's) binnen
-custom ExtAuth-services achter Gloo Gateway. De module geeft vier tokenvarianten
-uit die in de basis identiek zijn (zelfde header, zelfde registered claims, zelfde
-ondertekening) en uitsluitend in hun domeinspecifieke claims verschillen:
+custom ExtAuth-services achter Gloo Gateway. De module geeft tokenvarianten uit
+die in de basis identiek zijn (zelfde header, zelfde registered claims, zelfde
+ondertekening) en uitsluitend in hun domeinspecifieke claims verschillen. Drie
+varianten zitten ingebouwd:
 
-- **Medewerkersportaal** — intern gebruik
 - **eIDAS** — de Europese standaard voor grensoverschrijdende authenticatie
 - **DigiD** — authenticatie van burgers (Logius)
 - **eHerkenning** — authenticatie van organisaties en handelende personen
+
+Daarnaast kunnen consumers van deze library hun **eigen tokentype** definiëren
+via `IssueCustom`, zonder de library aan te passen. Zo blijft de module vrij van
+organisatiespecifieke varianten (zie [Custom tokentype](#custom-tokentype)).
 
 De module is opgezet rond bestaande standaarden en met een minimaal
 supply-chain-oppervlak: de enige externe afhankelijkheid is
@@ -50,23 +54,58 @@ extauthsec/                rootpackage: Signer, Verifier, sleutel- en JWKS-logic
   algoritme-allowlist tegen algorithm-confusion, exp/nbf, iss/aud). Bedoeld voor
   zelftest en lichte verificatie; productie-verifiers in andere diensten gebruiken
   hun eigen JOSE-bibliotheek.
-- `pkg/token.Service` — biedt per variant een `Issue...`-methode.
+- `pkg/token.Service` — biedt per ingebouwde variant een `Issue...`-methode plus
+  het generieke `IssueCustom` voor eigen tokentypes.
 
 ### Claim-indeling
 
 De OIDC-standaardclaims staan op het hoogste niveau (`iss`, `sub`, `aud`, `exp`,
 `nbf`, `iat`, `jti`, en waar van toepassing `acr`, `amr`, `auth_time`). De
-variantspecifieke gegevens staan genest onder een eigen sleutel
-(`medewerkersportaal`, `eidas`, `digid`, `eherkenning`). De private claim
-`cjib_token_type` benoemt het tokentype expliciet.
+variantspecifieke gegevens staan genest onder een eigen sleutel (`eidas`,
+`digid`, `eherkenning`, of bij een custom variant een door de consumer gekozen
+sleutel). De private claim `token_type` benoemt het tokentype expliciet.
+
+De naam van die claim is configureerbaar via `WithTokenTypeClaim` (standaard
+`token_type`), zodat organisaties hun eigen collision-resistant namespace
+(RFC 7519 §4.3) kunnen gebruiken, bijvoorbeeld `example_token_type`.
 
 De `acr`-claim wordt gevuld met de eIDAS LoA-URI: direct bij eIDAS, afgeleid bij
-DigiD en eHerkenning (zie de `EIDAS()`-mappings), en leeg bij het medewerkersportaal.
+DigiD en eHerkenning (zie de `EIDAS()`-mappings). Bij een custom variant bepaalt
+de consumer zelf de `acr`-waarde (optioneel).
+
+### Custom tokentype
+
+Een applicatie die deze library gebruikt kan een eigen tokentype uitgeven zonder
+de library te wijzigen. De payload is een gewone struct die de consumer zelf
+bezit; implementeert die een `Validate() error`, dan wordt die vóór ondertekening
+aangeroepen. De `ClaimsKey` mag niet botsen met een gereserveerde claim.
+
+```go
+type AcmeClaims struct {
+	EmployeeID string   `json:"employee_id"`
+	Roles      []string `json:"roles,omitempty"`
+}
+
+func (p AcmeClaims) Validate() error {
+	if p.EmployeeID == "" {
+		return errors.New("employee_id ontbreekt")
+	}
+	return nil
+}
+
+jwt, err := svc.IssueCustom(token.CustomRequest{
+	CommonRequest: token.CommonRequest{Subject: "emp-00421", Audience: []string{"acme-portal-api"}},
+	Type:          "acme-portal", // waarde van de token_type-claim
+	ClaimsKey:     "acme-portal", // sleutel waaronder de payload genest wordt
+	ACR:           "",            // optioneel
+	Claims:        AcmeClaims{EmployeeID: "00421", Roles: []string{"beheerder"}},
+})
+```
 
 ## Installatie
 
 ```sh
-go get github.com/cjib/gloo-gateway-extauth-sec
+go get github.com/jwt-extauth/gloo-gateway-extauth-sec
 ```
 
 Vereist Go 1.22 of nieuwer.
@@ -80,14 +119,14 @@ import (
 	"fmt"
 	"log"
 
-	extauthsec "github.com/cjib/gloo-gateway-extauth-sec"
-	"github.com/cjib/gloo-gateway-extauth-sec/pkg/claims"
-	"github.com/cjib/gloo-gateway-extauth-sec/pkg/token"
+	extauthsec "github.com/jwt-extauth/gloo-gateway-extauth-sec"
+	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/claims"
+	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/token"
 )
 
 func main() {
 	signer, err := extauthsec.NewSigner(
-		extauthsec.WithIssuer("https://extauth.cjib.nl"),
+		extauthsec.WithIssuer("https://extauth.example.org"),
 		extauthsec.WithSigningKeyFile("/etc/extauth/signing-key.pem"),
 		// extauthsec.WithAlgorithm(extauthsec.PS256), // optioneel
 	)
@@ -125,8 +164,9 @@ func main() {
 }
 ```
 
-Een volledig werkend voorbeeld dat alle vier varianten uitgeeft, de JWKS toont en
-een token verifieert staat in [`examples/basic`](examples/basic/main.go):
+Een volledig werkend voorbeeld dat de drie ingebouwde varianten plus een custom
+variant uitgeeft, de JWKS toont en een token verifieert staat in
+[`examples/basic`](examples/basic/main.go):
 
 ```sh
 go run ./examples/basic

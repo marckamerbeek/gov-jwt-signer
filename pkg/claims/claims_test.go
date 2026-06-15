@@ -7,15 +7,6 @@ import (
 	"testing"
 )
 
-func TestMedewerkersportaalValidate(t *testing.T) {
-	if err := (Medewerkersportaal{}).Validate(); !errors.Is(err, ErrMissingEmployeeID) {
-		t.Fatalf("lege medewerker: verwacht ErrMissingEmployeeID, kreeg %v", err)
-	}
-	if err := (Medewerkersportaal{EmployeeID: "12345"}).Validate(); err != nil {
-		t.Fatalf("geldige medewerker: onverwachte fout %v", err)
-	}
-}
-
 func TestEIDASValidate(t *testing.T) {
 	valid := EIDAS{
 		PersonIdentifier: "NL/BE/12345",

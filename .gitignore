@@ -5,6 +5,9 @@
 *.so
 *.dylib
 
+# Gecompileerde voorbeelden
+/examples/basic/basic
+
 # Test- en coveragebestanden
 *.test
 *.out

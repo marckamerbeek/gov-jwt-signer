@@ -8,25 +8,25 @@ package claims
 import "errors"
 
 // TokenType identifies the variant of an issued token. The value is included as
-// the private claim "cjib_token_type" in the JWT so that verifiers can determine
-// the token type explicitly.
+// a private claim (by default "token_type", see DefaultTokenTypeClaim) so
+// that verifiers can determine the token type explicitly. Besides the built-in
+// variants below, callers may supply their own TokenType for custom variants.
 type TokenType string
 
 const (
-	TokenTypeMedewerkersportaal TokenType = "medewerkersportaal"
-	TokenTypeEIDAS              TokenType = "eidas"
-	TokenTypeDigiD              TokenType = "digid"
-	TokenTypeEHerkenning        TokenType = "eherkenning"
+	TokenTypeEIDAS       TokenType = "eidas"
+	TokenTypeDigiD       TokenType = "digid"
+	TokenTypeEHerkenning TokenType = "eherkenning"
 )
 
-// TokenTypeClaim is the name of the private claim carrying the token type.
-// The "cjib_" prefix serves as a collision-resistant namespace (RFC 7519 §4.3).
-const TokenTypeClaim = "cjib_token_type"
+// DefaultTokenTypeClaim is the default name of the private claim carrying the
+// token type. Override it via extauthsec.WithTokenTypeClaim to use your own
+// collision-resistant namespace (RFC 7519 §4.3), e.g. "example_token_type".
+const DefaultTokenTypeClaim = "token_type"
 
 // Validation errors of the claim structs.
 var (
 	ErrMissingSubject          = errors.New("claims: subject ontbreekt")
-	ErrMissingEmployeeID       = errors.New("claims: employee_id ontbreekt")
 	ErrMissingPersonIdentifier = errors.New("claims: eIDAS PersonIdentifier ontbreekt")
 	ErrMissingFamilyName       = errors.New("claims: eIDAS CurrentFamilyName ontbreekt")
 	ErrMissingGivenName        = errors.New("claims: eIDAS CurrentGivenName ontbreekt")

@@ -20,14 +20,15 @@ import (
 // A Signer is immutable after construction and safe for concurrent use by
 // multiple goroutines.
 type Signer struct {
-	key        crypto.Signer
-	method     jwt.SigningMethod
-	algorithm  Algorithm
-	keyID      string
-	issuer     string
-	defaultTTL time.Duration
-	now        func() time.Time
-	jwk        JWK
+	key            crypto.Signer
+	method         jwt.SigningMethod
+	algorithm      Algorithm
+	keyID          string
+	issuer         string
+	defaultTTL     time.Duration
+	now            func() time.Time
+	jwk            JWK
+	tokenTypeClaim string
 }
 
 // NewSigner builds a Signer from the given options. At minimum a signing key
@@ -67,14 +68,15 @@ func NewSigner(opts ...Option) (*Signer, error) {
 	}
 
 	return &Signer{
-		key:        key,
-		method:     method,
-		algorithm:  cfg.algorithm,
-		keyID:      jwk.Kid,
-		issuer:     cfg.issuer,
-		defaultTTL: cfg.defaultTTL,
-		now:        cfg.now,
-		jwk:        jwk,
+		key:            key,
+		method:         method,
+		algorithm:      cfg.algorithm,
+		keyID:          jwk.Kid,
+		issuer:         cfg.issuer,
+		defaultTTL:     cfg.defaultTTL,
+		now:            cfg.now,
+		jwk:            jwk,
+		tokenTypeClaim: cfg.tokenTypeClaim,
 	}, nil
 }
 
@@ -98,6 +100,10 @@ func (s *Signer) KeyID() string { return s.keyID }
 
 // DefaultTTL returns the default validity duration.
 func (s *Signer) DefaultTTL() time.Duration { return s.defaultTTL }
+
+// TokenTypeClaim returns the name of the private claim that carries the token
+// type (default "token_type", see WithTokenTypeClaim).
+func (s *Signer) TokenTypeClaim() string { return s.tokenTypeClaim }
 
 // Now returns the current time according to the configured clock.
 func (s *Signer) Now() time.Time { return s.now() }
