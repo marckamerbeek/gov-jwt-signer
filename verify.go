@@ -47,7 +47,7 @@ func NewVerifier(jwks JWKS, opts ...VerifierOption) (*Verifier, error) {
 	algSet := make(map[string]struct{})
 	for _, k := range jwks.Keys {
 		if k.Kid == "" {
-			return nil, fmt.Errorf("extauthsec: JWK zonder kid in de set")
+			return nil, fmt.Errorf("extauthsec: JWK without kid in the set")
 		}
 		v.keys[k.Kid] = k
 		if k.Alg != "" {
@@ -145,6 +145,6 @@ func curveFromName(name string) (elliptic.Curve, error) {
 	case "P-521":
 		return elliptic.P521(), nil
 	default:
-		return nil, fmt.Errorf("%w: kromme %q", ErrInvalidKey, name)
+		return nil, fmt.Errorf("%w: curve %q", ErrInvalidKey, name)
 	}
 }

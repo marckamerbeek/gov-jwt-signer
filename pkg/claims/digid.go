@@ -14,9 +14,9 @@ type DigiD struct {
 	// Pseudonym is a sectoral/polymorphic pseudonym. Optional if BSN is set.
 	Pseudonym string `json:"pseudonym,omitempty"`
 
-	// Betrouwbaarheidsniveau is the DigiD level (basis/midden/substantieel/hoog).
+	// AssuranceLevel is the DigiD level (basis/midden/substantieel/hoog).
 	// Required.
-	Betrouwbaarheidsniveau DigiDLevel `json:"betrouwbaarheidsniveau"`
+	AssuranceLevel DigiDLevel `json:"betrouwbaarheidsniveau"`
 }
 
 // Validate checks that an identifier and a valid level are present.
@@ -24,10 +24,10 @@ func (d DigiD) Validate() error {
 	if d.BSN == "" && d.Pseudonym == "" {
 		return ErrMissingDigiDIdentifier
 	}
-	if d.Betrouwbaarheidsniveau == "" {
+	if d.AssuranceLevel == "" {
 		return ErrMissingDigiDLevel
 	}
-	if !d.Betrouwbaarheidsniveau.Valid() {
+	if !d.AssuranceLevel.Valid() {
 		return ErrInvalidAssuranceLevel
 	}
 	return nil

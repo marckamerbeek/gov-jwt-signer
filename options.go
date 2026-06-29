@@ -39,7 +39,7 @@ func defaultConfig() *config {
 func WithIssuer(iss string) Option {
 	return func(c *config) error {
 		if iss == "" {
-			return fmt.Errorf("extauthsec: issuer mag niet leeg zijn")
+			return fmt.Errorf("extauthsec: issuer must not be empty")
 		}
 		c.issuer = iss
 		return nil
@@ -73,7 +73,7 @@ func WithSigningKeyFile(path string) Option {
 	return func(c *config) error {
 		b, err := os.ReadFile(path) //nolint:gosec // path comes from the calling configuration
 		if err != nil {
-			return fmt.Errorf("extauthsec: kan sleutelbestand niet lezen: %w", err)
+			return fmt.Errorf("extauthsec: cannot read key file: %w", err)
 		}
 		c.keyPEM = b
 		return nil
@@ -94,7 +94,7 @@ func WithKeyID(kid string) Option {
 func WithDefaultTTL(ttl time.Duration) Option {
 	return func(c *config) error {
 		if ttl <= 0 {
-			return fmt.Errorf("extauthsec: TTL moet positief zijn")
+			return fmt.Errorf("extauthsec: TTL must be positive")
 		}
 		c.defaultTTL = ttl
 		return nil
@@ -108,7 +108,7 @@ func WithDefaultTTL(ttl time.Duration) Option {
 func WithTokenTypeClaim(name string) Option {
 	return func(c *config) error {
 		if name == "" {
-			return fmt.Errorf("extauthsec: token-type-claim mag niet leeg zijn")
+			return fmt.Errorf("extauthsec: token-type claim must not be empty")
 		}
 		c.tokenTypeClaim = name
 		return nil
@@ -119,7 +119,7 @@ func WithTokenTypeClaim(name string) Option {
 func WithClock(now func() time.Time) Option {
 	return func(c *config) error {
 		if now == nil {
-			return fmt.Errorf("extauthsec: klok mag niet nil zijn")
+			return fmt.Errorf("extauthsec: clock must not be nil")
 		}
 		c.now = now
 		return nil

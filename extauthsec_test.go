@@ -62,10 +62,10 @@ func newTestSigner(t *testing.T, opts ...Option) *Signer {
 
 func TestNewSignerRequiresIssuerAndKey(t *testing.T) {
 	if _, err := NewSigner(WithSigningKeyPEM(rsaKeyPEM(t))); err == nil {
-		t.Fatal("verwacht fout zonder issuer")
+		t.Fatal("expected error without issuer")
 	}
 	if _, err := NewSigner(WithIssuer("x")); !errors.Is(err, ErrNoSigningKey) {
-		t.Fatalf("verwacht ErrNoSigningKey, kreeg %v", err)
+		t.Fatalf("expected ErrNoSigningKey, got %v", err)
 	}
 }
 
@@ -90,7 +90,7 @@ func TestSignSetsHeader(t *testing.T) {
 		t.Errorf("alg = %v", parsed.Header["alg"])
 	}
 	if parsed.Header["kid"] != s.KeyID() {
-		t.Errorf("kid = %v, wil %v", parsed.Header["kid"], s.KeyID())
+		t.Errorf("kid = %v, want %v", parsed.Header["kid"], s.KeyID())
 	}
 }
 
@@ -102,7 +102,7 @@ func TestKeyAlgorithmMismatch(t *testing.T) {
 		WithAlgorithm(RS256),
 	)
 	if !errors.Is(err, ErrKeyAlgorithmMismatch) {
-		t.Fatalf("verwacht ErrKeyAlgorithmMismatch, kreeg %v", err)
+		t.Fatalf("expected ErrKeyAlgorithmMismatch, got %v", err)
 	}
 }
 
@@ -136,15 +136,15 @@ func TestThumbprintStableAndKidUsed(t *testing.T) {
 	s1, _ := NewSigner(WithIssuer("x"), WithSigningKeyPEM(pemBytes))
 	s2, _ := NewSigner(WithIssuer("x"), WithSigningKeyPEM(pemBytes))
 	if s1.KeyID() != s2.KeyID() {
-		t.Errorf("thumbprint niet stabiel: %s vs %s", s1.KeyID(), s2.KeyID())
+		t.Errorf("thumbprint not stable: %s vs %s", s1.KeyID(), s2.KeyID())
 	}
 	if s1.KeyID() == "" {
-		t.Error("kid is leeg")
+		t.Error("kid is empty")
 	}
 	// An explicit kid must take precedence.
-	s3, _ := NewSigner(WithIssuer("x"), WithSigningKeyPEM(pemBytes), WithKeyID("mijn-kid"))
-	if s3.KeyID() != "mijn-kid" {
-		t.Errorf("expliciete kid genegeerd: %s", s3.KeyID())
+	s3, _ := NewSigner(WithIssuer("x"), WithSigningKeyPEM(pemBytes), WithKeyID("my-kid"))
+	if s3.KeyID() != "my-kid" {
+		t.Errorf("explicit kid ignored: %s", s3.KeyID())
 	}
 }
 
@@ -160,17 +160,20 @@ func TestVerifierRejectsTamperedToken(t *testing.T) {
 	}
 	v, _ := NewVerifier(s.JWKS())
 
-	// Tamper with the last character of the signature.
+	// Tamper with the first character of the signature. The first base64url
+	// character carries fully significant bits (unlike the last, which is mostly
+	// padding and can decode to identical bytes), so flipping it always changes
+	// the decoded signature.
 	parts := strings.Split(tok, ".")
 	sig := []byte(parts[2])
-	if sig[len(sig)-1] == 'A' {
-		sig[len(sig)-1] = 'B'
+	if sig[0] == 'A' {
+		sig[0] = 'B'
 	} else {
-		sig[len(sig)-1] = 'A'
+		sig[0] = 'A'
 	}
 	tampered := parts[0] + "." + parts[1] + "." + string(sig)
 	if _, err := v.Verify(tampered); err == nil {
-		t.Fatal("verwacht fout bij gemanipuleerde handtekening")
+		t.Fatal("expected error for tampered signature")
 	}
 }
 
@@ -184,7 +187,7 @@ func TestVerifierEnforcesIssuerAndExpiry(t *testing.T) {
 	}})
 	v, _ := NewVerifier(s.JWKS(), WithExpectedIssuer("https://issuer.test"))
 	if _, err := v.Verify(tok); err == nil {
-		t.Fatal("verwacht fout bij verlopen token")
+		t.Fatal("expected error for expired token")
 	}
 
 	// Wrong expected issuer.
@@ -194,8 +197,8 @@ func TestVerifierEnforcesIssuerAndExpiry(t *testing.T) {
 		Subject:   "sub",
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
 	}})
-	v2, _ := NewVerifier(s2.JWKS(), WithExpectedIssuer("https://andere.test"))
+	v2, _ := NewVerifier(s2.JWKS(), WithExpectedIssuer("https://other.test"))
 	if _, err := v2.Verify(tok2); err == nil {
-		t.Fatal("verwacht fout bij verkeerde issuer")
+		t.Fatal("expected error for wrong issuer")
 	}
 }

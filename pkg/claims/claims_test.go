@@ -15,7 +15,7 @@ func TestEIDASValidate(t *testing.T) {
 		DateOfBirth:      "1980-01-02",
 	}
 	if err := valid.Validate(); err != nil {
-		t.Fatalf("geldige eIDAS: onverwachte fout %v", err)
+		t.Fatalf("valid eIDAS: unexpected error %v", err)
 	}
 
 	cases := []struct {
@@ -23,64 +23,64 @@ func TestEIDASValidate(t *testing.T) {
 		mutate  func(*EIDAS)
 		wantErr error
 	}{
-		{"geen PersonIdentifier", func(e *EIDAS) { e.PersonIdentifier = "" }, ErrMissingPersonIdentifier},
-		{"geen FamilyName", func(e *EIDAS) { e.FamilyName = "" }, ErrMissingFamilyName},
-		{"geen GivenName", func(e *EIDAS) { e.GivenName = "" }, ErrMissingGivenName},
-		{"geen DateOfBirth", func(e *EIDAS) { e.DateOfBirth = "" }, ErrMissingDateOfBirth},
-		{"fout datumformaat", func(e *EIDAS) { e.DateOfBirth = "02-01-1980" }, ErrInvalidDateOfBirth},
+		{"no PersonIdentifier", func(e *EIDAS) { e.PersonIdentifier = "" }, ErrMissingPersonIdentifier},
+		{"no FamilyName", func(e *EIDAS) { e.FamilyName = "" }, ErrMissingFamilyName},
+		{"no GivenName", func(e *EIDAS) { e.GivenName = "" }, ErrMissingGivenName},
+		{"no DateOfBirth", func(e *EIDAS) { e.DateOfBirth = "" }, ErrMissingDateOfBirth},
+		{"bad date format", func(e *EIDAS) { e.DateOfBirth = "02-01-1980" }, ErrInvalidDateOfBirth},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := valid
 			tc.mutate(&e)
 			if err := e.Validate(); !errors.Is(err, tc.wantErr) {
-				t.Fatalf("verwacht %v, kreeg %v", tc.wantErr, err)
+				t.Fatalf("expected %v, got %v", tc.wantErr, err)
 			}
 		})
 	}
 }
 
 func TestDigiDValidate(t *testing.T) {
-	if err := (DigiD{Betrouwbaarheidsniveau: DigiDHoog}).Validate(); !errors.Is(err, ErrMissingDigiDIdentifier) {
-		t.Fatalf("geen identifier: verwacht ErrMissingDigiDIdentifier, kreeg %v", err)
+	if err := (DigiD{AssuranceLevel: DigiDHoog}).Validate(); !errors.Is(err, ErrMissingDigiDIdentifier) {
+		t.Fatalf("no identifier: expected ErrMissingDigiDIdentifier, got %v", err)
 	}
 	if err := (DigiD{BSN: "123456782"}).Validate(); !errors.Is(err, ErrMissingDigiDLevel) {
-		t.Fatalf("geen niveau: verwacht ErrMissingDigiDLevel, kreeg %v", err)
+		t.Fatalf("no level: expected ErrMissingDigiDLevel, got %v", err)
 	}
-	if err := (DigiD{BSN: "123456782", Betrouwbaarheidsniveau: "ongeldig"}).Validate(); !errors.Is(err, ErrInvalidAssuranceLevel) {
-		t.Fatalf("ongeldig niveau: verwacht ErrInvalidAssuranceLevel, kreeg %v", err)
+	if err := (DigiD{BSN: "123456782", AssuranceLevel: "invalid"}).Validate(); !errors.Is(err, ErrInvalidAssuranceLevel) {
+		t.Fatalf("invalid level: expected ErrInvalidAssuranceLevel, got %v", err)
 	}
-	if err := (DigiD{Pseudonym: "abc", Betrouwbaarheidsniveau: DigiDSubstantieel}).Validate(); err != nil {
-		t.Fatalf("geldige DigiD met pseudoniem: onverwachte fout %v", err)
+	if err := (DigiD{Pseudonym: "abc", AssuranceLevel: DigiDSubstantieel}).Validate(); err != nil {
+		t.Fatalf("valid DigiD with pseudonym: unexpected error %v", err)
 	}
 }
 
 func TestEHerkenningValidate(t *testing.T) {
 	if err := (EHerkenning{ActingSubjectID: "x", AssuranceClass: EHLoA3}).Validate(); !errors.Is(err, ErrMissingEHEntity) {
-		t.Fatalf("geen entiteit: verwacht ErrMissingEHEntity, kreeg %v", err)
+		t.Fatalf("no entity: expected ErrMissingEHEntity, got %v", err)
 	}
 	if err := (EHerkenning{OIN: "00000001", AssuranceClass: EHLoA3}).Validate(); !errors.Is(err, ErrMissingEHActingSubject) {
-		t.Fatalf("geen acting subject: verwacht ErrMissingEHActingSubject, kreeg %v", err)
+		t.Fatalf("no acting subject: expected ErrMissingEHActingSubject, got %v", err)
 	}
 	if err := (EHerkenning{OIN: "00000001", ActingSubjectID: "x"}).Validate(); !errors.Is(err, ErrMissingEHAssurance) {
-		t.Fatalf("geen assurance: verwacht ErrMissingEHAssurance, kreeg %v", err)
+		t.Fatalf("no assurance: expected ErrMissingEHAssurance, got %v", err)
 	}
-	if err := (EHerkenning{OIN: "00000001", ActingSubjectID: "x", AssuranceClass: "urn:onbekend"}).Validate(); !errors.Is(err, ErrInvalidAssuranceLevel) {
-		t.Fatalf("ongeldige assurance: verwacht ErrInvalidAssuranceLevel, kreeg %v", err)
+	if err := (EHerkenning{OIN: "00000001", ActingSubjectID: "x", AssuranceClass: "urn:unknown"}).Validate(); !errors.Is(err, ErrInvalidAssuranceLevel) {
+		t.Fatalf("invalid assurance: expected ErrInvalidAssuranceLevel, got %v", err)
 	}
 	if err := (EHerkenning{KvK: "12345678", ActingSubjectID: "x", AssuranceClass: EHLoA4}).Validate(); err != nil {
-		t.Fatalf("geldige eHerkenning: onverwachte fout %v", err)
+		t.Fatalf("valid eHerkenning: unexpected error %v", err)
 	}
 }
 
 func TestAssuranceLevelValid(t *testing.T) {
 	for _, a := range []AssuranceLevel{LoALow, LoASubstantial, LoAHigh} {
 		if !a.Valid() {
-			t.Errorf("%q zou geldig moeten zijn", a)
+			t.Errorf("%q should be valid", a)
 		}
 	}
-	if AssuranceLevel("http://example.com/loa/onzin").Valid() {
-		t.Error("onbekende LoA zou ongeldig moeten zijn")
+	if AssuranceLevel("http://example.com/loa/nonsense").Valid() {
+		t.Error("unknown LoA should be invalid")
 	}
 }
 
@@ -93,7 +93,7 @@ func TestEHerkenningEIDASMapping(t *testing.T) {
 	}
 	for cls, want := range cases {
 		if got := cls.EIDAS(); got != want {
-			t.Errorf("%q -> %q, verwacht %q", cls, got, want)
+			t.Errorf("%q -> %q, expected %q", cls, got, want)
 		}
 	}
 }
@@ -107,7 +107,7 @@ func TestDigiDEIDASMapping(t *testing.T) {
 	}
 	for lvl, want := range cases {
 		if got := lvl.EIDAS(); got != want {
-			t.Errorf("%q -> %q, verwacht %q", lvl, got, want)
+			t.Errorf("%q -> %q, expected %q", lvl, got, want)
 		}
 	}
 }

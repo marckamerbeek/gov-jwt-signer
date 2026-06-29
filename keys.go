@@ -69,7 +69,7 @@ func (a Algorithm) supported() bool {
 func parsePrivateKeyPEM(pemBytes []byte) (crypto.Signer, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
-		return nil, fmt.Errorf("%w: geen PEM-blok gevonden", ErrInvalidKey)
+		return nil, fmt.Errorf("%w: no PEM block found", ErrInvalidKey)
 	}
 
 	switch block.Type {
@@ -92,7 +92,7 @@ func parsePrivateKeyPEM(pemBytes []byte) (crypto.Signer, error) {
 		}
 		return key, nil
 	default:
-		return nil, fmt.Errorf("%w: onbekend PEM-type %q", ErrInvalidKey, block.Type)
+		return nil, fmt.Errorf("%w: unknown PEM type %q", ErrInvalidKey, block.Type)
 	}
 }
 
@@ -103,7 +103,7 @@ func asSigner(key any) (crypto.Signer, error) {
 	case *ecdsa.PrivateKey:
 		return k, nil
 	default:
-		return nil, fmt.Errorf("%w: sleuteltype %T wordt niet ondersteund", ErrInvalidKey, key)
+		return nil, fmt.Errorf("%w: key type %T is not supported", ErrInvalidKey, key)
 	}
 }
 

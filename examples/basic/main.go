@@ -64,7 +64,7 @@ func main() {
 
 	// 2. eIDAS
 	eid, err := svc.IssueEIDAS(token.EIDASRequest{
-		CommonRequest: token.CommonRequest{Subject: "NL/BE/12345", Audience: []string{"grensoverschrijdende-dienst"}},
+		CommonRequest: token.CommonRequest{Subject: "NL/BE/12345", Audience: []string{"cross-border-service"}},
 		LoA:           claims.LoAHigh,
 		Person: claims.EIDAS{
 			PersonIdentifier: "NL/BE/12345",
@@ -78,17 +78,17 @@ func main() {
 
 	// 3. DigiD
 	dig, err := svc.IssueDigiD(token.DigiDRequest{
-		CommonRequest: token.CommonRequest{Subject: "burger-pseudonym-9f2", Audience: []string{"burgerportaal"}},
+		CommonRequest: token.CommonRequest{Subject: "citizen-pseudonym-9f2", Audience: []string{"citizen-portal"}},
 		Claims: claims.DigiD{
-			Pseudonym:              "9f2c7b1e-...",
-			Betrouwbaarheidsniveau: claims.DigiDSubstantieel,
+			Pseudonym:      "9f2c7b1e-...",
+			AssuranceLevel: claims.DigiDSubstantieel,
 		},
 	})
 	must("digid", dig, err)
 
 	// 4. eHerkenning
 	eh, err := svc.IssueEHerkenning(token.EHerkenningRequest{
-		CommonRequest: token.CommonRequest{Subject: "kvk-12345678", Audience: []string{"zakelijk-loket"}},
+		CommonRequest: token.CommonRequest{Subject: "kvk-12345678", Audience: []string{"business-portal"}},
 		Claims: claims.EHerkenning{
 			KvK:             "12345678",
 			ActingSubjectID: "urn:etoegang:1.9:id:...",
@@ -108,7 +108,7 @@ func main() {
 	// Verify an issued token.
 	verifier, err := extauthsec.NewVerifier(signer.JWKS(),
 		extauthsec.WithExpectedIssuer("https://extauth.example.org"),
-		extauthsec.WithExpectedAudience("grensoverschrijdende-dienst"),
+		extauthsec.WithExpectedAudience("cross-border-service"),
 	)
 	if err != nil {
 		log.Fatalf("verifier: %v", err)
@@ -117,7 +117,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("verify: %v", err)
 	}
-	fmt.Printf("\neIDAS-token geverifieerd. acr=%v, type=%v\n",
+	fmt.Printf("\neIDAS token verified. acr=%v, type=%v\n",
 		verified["acr"], verified[claims.DefaultTokenTypeClaim])
 }
 
@@ -135,7 +135,7 @@ type acmeClaims struct {
 
 func (p acmeClaims) Validate() error {
 	if p.EmployeeID == "" {
-		return fmt.Errorf("employee_id ontbreekt")
+		return fmt.Errorf("employee_id is missing")
 	}
 	return nil
 }
@@ -150,11 +150,11 @@ func must(name, tok string, err error) {
 func mustGenerateRSAKeyPEM(bits int) []byte {
 	key, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
-		log.Fatalf("genereer sleutel: %v", err)
+		log.Fatalf("generate key: %v", err)
 	}
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		log.Fatalf("marshal sleutel: %v", err)
+		log.Fatalf("marshal key: %v", err)
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 }

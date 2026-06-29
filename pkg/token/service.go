@@ -24,15 +24,15 @@ import (
 // Sentinel errors for custom token issuance. Use errors.Is() to match against them.
 var (
 	// ErrMissingTokenType is returned when a CustomRequest has no Type.
-	ErrMissingTokenType = errors.New("token: custom Type ontbreekt")
+	ErrMissingTokenType = errors.New("token: custom Type is missing")
 
 	// ErrMissingClaimsKey is returned when a CustomRequest carries Claims but no
 	// ClaimsKey to nest them under.
-	ErrMissingClaimsKey = errors.New("token: custom ClaimsKey ontbreekt")
+	ErrMissingClaimsKey = errors.New("token: custom ClaimsKey is missing")
 
 	// ErrReservedClaimsKey is returned when a CustomRequest's ClaimsKey collides
 	// with a reserved top-level claim name (e.g. "iss", "acr", the token-type claim).
-	ErrReservedClaimsKey = errors.New("token: ClaimsKey botst met een gereserveerde claim")
+	ErrReservedClaimsKey = errors.New("token: ClaimsKey collides with a reserved claim")
 )
 
 // reservedClaimNames are the top-level claims a custom variant may not overwrite
@@ -50,7 +50,7 @@ type Service struct {
 // NewService creates a Service around a configured Signer.
 func NewService(signer *extauthsec.Signer) (*Service, error) {
 	if signer == nil {
-		return nil, fmt.Errorf("token: signer mag niet nil zijn")
+		return nil, fmt.Errorf("token: signer must not be nil")
 	}
 	return &Service{signer: signer}, nil
 }
@@ -177,7 +177,7 @@ func (s *Service) IssueDigiD(req DigiDRequest) (string, error) {
 	if err := req.Claims.Validate(); err != nil {
 		return "", err
 	}
-	acr := string(req.Claims.Betrouwbaarheidsniveau.EIDAS())
+	acr := string(req.Claims.AssuranceLevel.EIDAS())
 	return s.issue(req.CommonRequest, claims.TokenTypeDigiD, acr, "digid", &req.Claims)
 }
 
