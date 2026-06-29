@@ -92,7 +92,7 @@ func (v *Verifier) keyfunc(token *jwt.Token) (any, error) {
 	kid, _ := token.Header["kid"].(string)
 	jwk, ok := v.keys[kid]
 	if !ok {
-		return nil, fmt.Errorf("extauthsec: geen sleutel voor kid %q", kid)
+		return nil, fmt.Errorf("extauthsec: no key for kid %q", kid)
 	}
 	return jwk.publicKey()
 }

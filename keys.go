@@ -167,7 +167,7 @@ func publicJWK(signer crypto.Signer, alg Algorithm, kid string) (JWK, error) {
 		jwk.Kid = kid
 		return jwk, nil
 	default:
-		return JWK{}, fmt.Errorf("%w: publieke sleutel %T", ErrInvalidKey, pub)
+		return JWK{}, fmt.Errorf("%w: public key %T", ErrInvalidKey, pub)
 	}
 }
 
@@ -180,7 +180,7 @@ func curveParams(c elliptic.Curve) (name string, byteSize int, err error) {
 	case elliptic.P521():
 		return "P-521", 66, nil
 	default:
-		return "", 0, fmt.Errorf("%w: niet-ondersteunde kromme", ErrInvalidKey)
+		return "", 0, fmt.Errorf("%w: non-supported curve", ErrInvalidKey)
 	}
 }
 
