@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	extauthsec "github.com/jwt-extauth/gloo-gateway-extauth-sec"
-	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/claims"
+	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 )
 
 // Sentinel errors for custom token issuance. Use errors.Is() to match against them.

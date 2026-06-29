@@ -1,4 +1,4 @@
-# gloo-gateway-extauth-sec
+# gov-jwt-signer
 
 A Go security module for signing JSON Web Tokens (JWTs) inside custom ExtAuth
 services behind Gloo Gateway. The module issues token variants that are identical
@@ -104,7 +104,7 @@ jwt, err := svc.IssueCustom(token.CustomRequest{
 ## Installation
 
 ```sh
-go get github.com/jwt-extauth/gloo-gateway-extauth-sec
+go get github.com/marckamerbeek/gov-jwt-signer
 ```
 
 Requires Go 1.22 or newer.
@@ -118,9 +118,9 @@ import (
 	"fmt"
 	"log"
 
-	extauthsec "github.com/jwt-extauth/gloo-gateway-extauth-sec"
-	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/claims"
-	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/token"
+	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
 
 func main() {

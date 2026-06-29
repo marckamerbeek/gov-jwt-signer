@@ -50,9 +50,9 @@ import (
 	"os"
 	"time"
 
-	extauthsec "github.com/jwt-extauth/gloo-gateway-extauth-sec"
-	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/claims"
-	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/token"
+	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
 
 // signingKey is the material the ExtAuth service needs to sign tokens. The public

@@ -24,6 +24,9 @@ go.work.sum
 *.p12
 *.pfx
 
+# Claude Code
+CLAUDE.md
+
 # Editor/OS
 .idea/
 .vscode/

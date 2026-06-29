@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jwt-extauth/gloo-gateway-extauth-sec/pkg/claims"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 )
 
 // Option configures a Signer via NewSigner.
