@@ -11,16 +11,16 @@ import (
 	"testing"
 	"time"
 
-	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	jwtsigner "github.com/marckamerbeek/gov-jwt-signer"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
 
-const testIssuer = "https://extauth.example.org"
+const testIssuer = "https://signer.example.org"
 
 // newTestService builds a Signer with a fresh RSA key and a Service around it,
 // plus a Verifier based on the corresponding JWKS.
-func newTestService(t *testing.T) (*token.Service, *extauthsec.Verifier) {
+func newTestService(t *testing.T) (*token.Service, *jwtsigner.Verifier) {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -33,9 +33,9 @@ func newTestService(t *testing.T) (*token.Service, *extauthsec.Verifier) {
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 
-	signer, err := extauthsec.NewSigner(
-		extauthsec.WithIssuer(testIssuer),
-		extauthsec.WithSigningKeyPEM(pemBytes),
+	signer, err := jwtsigner.NewSigner(
+		jwtsigner.WithIssuer(testIssuer),
+		jwtsigner.WithSigningKeyPEM(pemBytes),
 	)
 	if err != nil {
 		t.Fatalf("create signer: %v", err)
@@ -44,10 +44,10 @@ func newTestService(t *testing.T) (*token.Service, *extauthsec.Verifier) {
 	if err != nil {
 		t.Fatalf("create service: %v", err)
 	}
-	verifier, err := extauthsec.NewVerifier(
+	verifier, err := jwtsigner.NewVerifier(
 		signer.JWKS(),
-		extauthsec.WithExpectedIssuer(testIssuer),
-		extauthsec.WithExpectedAudience("urn:service:target"),
+		jwtsigner.WithExpectedIssuer(testIssuer),
+		jwtsigner.WithExpectedAudience("urn:service:target"),
 	)
 	if err != nil {
 		t.Fatalf("create verifier: %v", err)

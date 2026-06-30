@@ -20,7 +20,7 @@ const (
 )
 
 // DefaultTokenTypeClaim is the default name of the private claim carrying the
-// token type. Override it via extauthsec.WithTokenTypeClaim to use your own
+// token type. Override it via jwtsigner.WithTokenTypeClaim to use your own
 // collision-resistant namespace (RFC 7519 §4.3), e.g. "example_token_type".
 const DefaultTokenTypeClaim = "token_type"
 

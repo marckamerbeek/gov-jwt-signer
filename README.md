@@ -42,14 +42,14 @@ The module is layered so that the domain models are decoupled from the JOSE
 implementation:
 
 ```
-extauthsec/                root package: Signer, Verifier, key and JWKS logic
+jwtsigner/                root package: Signer, Verifier, key and JWKS logic
 ├── pkg/claims/            typed claim structs + assurance levels (no external deps)
 └── pkg/token/             Service that assembles and signs claims per variant
 ```
 
-- `extauthsec.Signer` — immutable and concurrency-safe; signs an arbitrary
+- `jwtsigner.Signer` — immutable and concurrency-safe; signs an arbitrary
   `jwt.Claims` and publishes the corresponding JWKS.
-- `extauthsec.Verifier` — validates issued tokens (kid matching, algorithm
+- `jwtsigner.Verifier` — validates issued tokens (kid matching, algorithm
   allowlist against algorithm confusion, exp/nbf, iss/aud). Intended for
   self-testing and lightweight verification; production verifiers in other
   services use their own JOSE library.
@@ -118,16 +118,16 @@ import (
 	"fmt"
 	"log"
 
-	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	jwtsigner "github.com/marckamerbeek/gov-jwt-signer"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
 
 func main() {
-	signer, err := extauthsec.NewSigner(
-		extauthsec.WithIssuer("https://extauth.example.org"),
-		extauthsec.WithSigningKeyFile("/etc/extauth/signing-key.pem"),
-		// extauthsec.WithAlgorithm(extauthsec.PS256), // optional
+	signer, err := jwtsigner.NewSigner(
+		jwtsigner.WithIssuer("https://signer.example.org"),
+		jwtsigner.WithSigningKeyFile("/etc/extauth/signing-key.pem"),
+		// jwtsigner.WithAlgorithm(jwtsigner.PS256), // optional
 	)
 	if err != nil {
 		log.Fatal(err)

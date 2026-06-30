@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package extauthsec is the cryptographic core of gov-jwt-signer: a
+// Package jwtsigner is the cryptographic core of gov-jwt-signer: a
 // security module for signing JWTs within custom Envoy external authorization
 // (ExtAuth) services.
 //
@@ -34,7 +34,7 @@
 //
 // The layering separates cryptography from domain logic:
 //
-//   - extauthsec (this package): key management, signing, JWKS, verification.
+//   - jwtsigner (this package): key management, signing, JWKS, verification.
 //   - .../pkg/claims: typed claim structs and assurance levels per variant,
 //     without external dependencies.
 //   - .../pkg/token: a high-level Service that assembles registered claims and
@@ -42,4 +42,4 @@
 //
 // The only external dependency is github.com/golang-jwt/jwt/v5 (itself without
 // transitive dependencies), which keeps the supply-chain surface minimal.
-package extauthsec
+package jwtsigner

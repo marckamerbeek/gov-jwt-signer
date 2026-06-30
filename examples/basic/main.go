@@ -18,7 +18,7 @@ import (
 	"log"
 	"time"
 
-	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	jwtsigner "github.com/marckamerbeek/gov-jwt-signer"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
@@ -27,11 +27,11 @@ func main() {
 	// In production the key comes from Vault/HSM; here we generate one for the demo.
 	keyPEM := mustGenerateRSAKeyPEM(2048)
 
-	signer, err := extauthsec.NewSigner(
-		extauthsec.WithIssuer("https://extauth.example.org"),
-		extauthsec.WithAlgorithm(extauthsec.RS256),
-		extauthsec.WithSigningKeyPEM(keyPEM),
-		extauthsec.WithDefaultTTL(5*time.Minute),
+	signer, err := jwtsigner.NewSigner(
+		jwtsigner.WithIssuer("https://signer.example.org"),
+		jwtsigner.WithAlgorithm(jwtsigner.RS256),
+		jwtsigner.WithSigningKeyPEM(keyPEM),
+		jwtsigner.WithDefaultTTL(5*time.Minute),
 	)
 	if err != nil {
 		log.Fatalf("signer: %v", err)
@@ -106,9 +106,9 @@ func main() {
 	fmt.Printf("\nJWKS:\n%s\n", jwks)
 
 	// Verify an issued token.
-	verifier, err := extauthsec.NewVerifier(signer.JWKS(),
-		extauthsec.WithExpectedIssuer("https://extauth.example.org"),
-		extauthsec.WithExpectedAudience("cross-border-service"),
+	verifier, err := jwtsigner.NewVerifier(signer.JWKS(),
+		jwtsigner.WithExpectedIssuer("https://signer.example.org"),
+		jwtsigner.WithExpectedAudience("cross-border-service"),
 	)
 	if err != nil {
 		log.Fatalf("verifier: %v", err)

@@ -34,7 +34,7 @@
 //	VAULT_TOKEN        Vault token (required)
 //	VAULT_KV_MOUNT     KV v1 mount path (default "secret")
 //	VAULT_SECRET_PATH  key storage prefix (default "jwks-service")
-//	ISSUER             iss claim for issued tokens (default https://extauth.example.org)
+//	ISSUER             iss claim for issued tokens (default https://signer.example.org)
 //
 // Run against a dev-mode Vault after the jwks-service rotator has run, or seed
 // it manually:
@@ -61,7 +61,7 @@ import (
 	"os"
 	"time"
 
-	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	jwtsigner "github.com/marckamerbeek/gov-jwt-signer"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
@@ -77,7 +77,7 @@ func main() {
 	addr := envOr("VAULT_ADDR", "http://127.0.0.1:8200")
 	mount := envOr("VAULT_KV_MOUNT", "secret")
 	secretPath := envOr("VAULT_SECRET_PATH", "jwks-service")
-	issuer := envOr("ISSUER", "https://extauth.example.org")
+	issuer := envOr("ISSUER", "https://signer.example.org")
 
 	vaultToken := os.Getenv("VAULT_TOKEN")
 	if vaultToken == "" {
@@ -96,11 +96,11 @@ func main() {
 	// to the value the jwks-service published in the JWKS so verifiers can select
 	// the right key. The jwks-service uses RS256 (RSA-4096), which is this
 	// library's default algorithm.
-	signer, err := extauthsec.NewSigner(
-		extauthsec.WithIssuer(issuer),
-		extauthsec.WithSigningKeyPEM(key.PrivateKeyPEM),
-		extauthsec.WithKeyID(key.KID),
-		extauthsec.WithDefaultTTL(5*time.Minute),
+	signer, err := jwtsigner.NewSigner(
+		jwtsigner.WithIssuer(issuer),
+		jwtsigner.WithSigningKeyPEM(key.PrivateKeyPEM),
+		jwtsigner.WithKeyID(key.KID),
+		jwtsigner.WithDefaultTTL(5*time.Minute),
 	)
 	if err != nil {
 		log.Fatalf("create signer: %v", err)

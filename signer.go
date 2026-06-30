@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-package extauthsec
+package jwtsigner
 
 import (
 	"crypto"
@@ -43,7 +43,7 @@ func NewSigner(opts ...Option) (*Signer, error) {
 	}
 
 	if cfg.issuer == "" {
-		return nil, fmt.Errorf("extauthsec: WithIssuer is required")
+		return nil, fmt.Errorf("jwtsigner: WithIssuer is required")
 	}
 	if len(cfg.keyPEM) == 0 {
 		return nil, ErrNoSigningKey
@@ -113,7 +113,7 @@ func (s *Signer) Now() time.Time { return s.now() }
 func (s *Signer) NewJTI() (string, error) {
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {
-		return "", fmt.Errorf("extauthsec: could not generate jti: %w", err)
+		return "", fmt.Errorf("jwtsigner: could not generate jti: %w", err)
 	}
 	return b64u(buf[:]), nil
 }

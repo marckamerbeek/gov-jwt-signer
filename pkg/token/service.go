@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	extauthsec "github.com/marckamerbeek/gov-jwt-signer"
+	jwtsigner "github.com/marckamerbeek/gov-jwt-signer"
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 )
 
@@ -44,11 +44,11 @@ var reservedClaimNames = map[string]struct{}{
 
 // Service assembles tokens and signs them.
 type Service struct {
-	signer *extauthsec.Signer
+	signer *jwtsigner.Signer
 }
 
 // NewService creates a Service around a configured Signer.
-func NewService(signer *extauthsec.Signer) (*Service, error) {
+func NewService(signer *jwtsigner.Signer) (*Service, error) {
 	if signer == nil {
 		return nil, fmt.Errorf("token: signer must not be nil")
 	}
