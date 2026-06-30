@@ -181,6 +181,38 @@ go run ./examples/basic
 - Publish `signer.JWKS()` / `signer.JWKSJSON()` on a JWKS endpoint so consumers
   can validate the signature.
 
+## Integration with jwks-service
+
+In a cluster, key generation, rotation and JWKS publication are typically
+delegated to a dedicated trust anchor such as
+[jwks-service](https://github.com/sirrapa-it/jwks-service). It manages one shared
+RSA keypair in HashiCorp Vault, rotates it on a schedule, and serves the public
+keys at `/.well-known/jwks.json`. This library is then only the **signer** inside
+the ExtAuth service; verifiers fetch the JWKS from the service, not from
+`signer.JWKS()` (which becomes a self-test helper).
+
+The signer obtains its key from Vault rather than from a local file:
+
+- jwks-service stores keys in a **KV v1** mount as `<path>/keys/<kid>`
+  (`pem`, `kid`, `created_at`, `expires_at`) with an `<path>/active` pointer to
+  the current signing key. Read the pointer, load the matching record, and pass
+  the PKCS#1 PEM with `WithSigningKeyPEM` plus `WithKeyID(<kid>)`.
+- **The `kid` must match the value the service publishes.** Set it explicitly
+  with `WithKeyID` from the Vault record. (jwks-service derives the `kid` as the
+  RFC 7638 thumbprint, the same scheme this library uses by default, so the two
+  agree — but taking the published value is authoritative regardless.)
+- Keys rotate, and a `Signer` is immutable, so reload the active key periodically
+  and rebuild the `Signer`. Tokens are short-lived and rotated keys stay in the
+  JWKS during a grace period, so a periodic refresh avoids signing under a key
+  that has left the JWKS.
+
+See [`examples/vault-sign`](examples/vault-sign/main.go) for a runnable example
+against this layout:
+
+```sh
+VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=<token> go run ./examples/vault-sign
+```
+
 ## Development
 
 ```sh
