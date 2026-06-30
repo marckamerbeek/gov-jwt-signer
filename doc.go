@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 // Package extauthsec is the cryptographic core of gov-jwt-signer: a
-// security module for signing JWTs within custom Gloo Gateway (Envoy) ExtAuth
-// services.
+// security module for signing JWTs within custom Envoy external authorization
+// (ExtAuth) services.
 //
 // # Purpose
 //

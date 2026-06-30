@@ -1,9 +1,9 @@
 # gov-jwt-signer
 
-A Go security module for signing JSON Web Tokens (JWTs) inside custom ExtAuth
-services behind Gloo Gateway. The module issues token variants that are identical
-at their core (same header, same registered claims, same signing) and differ only
-in their domain-specific claims. Three variants are built in:
+A Go security module for signing JSON Web Tokens (JWTs) inside custom Envoy
+external authorization (ExtAuth) services. The module issues token variants that
+are identical at their core (same header, same registered claims, same signing)
+and differ only in their domain-specific claims. Three variants are built in:
 
 - **eIDAS** — the European standard for cross-border authentication
 - **DigiD** — citizen authentication (Logius)
