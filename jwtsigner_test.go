@@ -202,3 +202,99 @@ func TestVerifierEnforcesIssuerAndExpiry(t *testing.T) {
 		t.Fatal("expected error for wrong issuer")
 	}
 }
+
+func TestVerifierRejectsJWKSWithoutAlg(t *testing.T) {
+	s := newTestSigner(t)
+	jwks := s.JWKS()
+	jwks.Keys[0].Alg = ""
+	if _, err := NewVerifier(jwks); !errors.Is(err, ErrJWKWithoutAlg) {
+		t.Fatalf("expected ErrJWKWithoutAlg, got %v", err)
+	}
+}
+
+func TestVerifierRejectsDuplicateKid(t *testing.T) {
+	s := newTestSigner(t)
+	jwks := s.JWKS()
+	dup := jwks.Keys[0]
+	jwks.Keys = append(jwks.Keys, dup)
+	if _, err := NewVerifier(jwks); !errors.Is(err, ErrDuplicateKeyID) {
+		t.Fatalf("expected ErrDuplicateKeyID, got %v", err)
+	}
+}
+
+func TestVerifierRejectsDisallowedAlgorithm(t *testing.T) {
+	pemBytes := rsaKeyPEM(t)
+	s, err := NewSigner(WithIssuer("https://issuer.test"), WithSigningKeyPEM(pemBytes))
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+	key, err := parsePrivateKeyPEM(pemBytes)
+	if err != nil {
+		t.Fatalf("parse key: %v", err)
+	}
+	rsaKey, ok := key.(*rsa.PrivateKey)
+	if !ok {
+		t.Fatal("expected RSA private key")
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS384, jwt.MapClaims{
+		"sub": "sub",
+		"exp": time.Now().Add(time.Minute).Unix(),
+	})
+	token.Header["kid"] = s.KeyID()
+	tok, err := token.SignedString(rsaKey)
+	if err != nil {
+		t.Fatalf("sign RS384: %v", err)
+	}
+	v, err := NewVerifier(s.JWKS())
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+	if _, err := v.Verify(tok); err == nil {
+		t.Fatal("expected error for RS384 token against RS256-only JWKS")
+	}
+}
+
+func TestNewSignerRejectsWeakRSAKey(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatalf("generate weak key: %v", err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	_, err = NewSigner(WithIssuer("x"), WithSigningKeyPEM(pemBytes))
+	if !errors.Is(err, ErrWeakSigningKey) {
+		t.Fatalf("expected ErrWeakSigningKey, got %v", err)
+	}
+}
+
+func TestVerifierRejectsOffCurveECJWK(t *testing.T) {
+	s, err := NewSigner(
+		WithIssuer("https://issuer.test"),
+		WithSigningKeyPEM(ecKeyPEM(t)),
+		WithAlgorithm(ES256),
+	)
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
+	tok, err := s.Sign(minimalClaims{jwt.RegisteredClaims{
+		Subject:   "sub",
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+	}})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	jwks := s.JWKS()
+	jwks.Keys[0].X = "AQ"
+	jwks.Keys[0].Y = "Ag"
+	v, err := NewVerifier(jwks)
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+	if _, err := v.Verify(tok); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("expected ErrInvalidKey for off-curve point, got %v", err)
+	}
+}
