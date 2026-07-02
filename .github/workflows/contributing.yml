@@ -1,0 +1,80 @@
+name: Contributing rules
+
+# Enforces the conventions documented in CONTRIBUTING.md that are not already
+# covered by golangci-lint in ci.yml: SPDX headers, formatting, module tidiness,
+# and the minimal-supply-chain rule.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enforce:
+    name: Enforce CONTRIBUTING.md
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+
+      - name: SPDX license header on every Go file
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            if ! head -n 1 "$f" | grep -qF '// SPDX-License-Identifier: EUPL-1.2'; then
+              echo "::error file=$f::first line must be '// SPDX-License-Identifier: EUPL-1.2'"
+              fail=1
+            fi
+          done < <(git ls-files '*.go')
+          exit $fail
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::these files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: goimports (local prefix)
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          out=$("$(go env GOPATH)/bin/goimports" -l -local github.com/marckamerbeek/gov-jwt-signer .)
+          if [ -n "$out" ]; then
+            echo "::error::these files have incorrect imports (run 'make tidy' / goimports):"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go mod tidy is clean
+        run: |
+          go mod tidy
+          if ! git diff --exit-code go.mod go.sum; then
+            echo "::error::go.mod/go.sum are not tidy; run 'go mod tidy' and commit the result"
+            exit 1
+          fi
+
+      - name: Minimal supply chain (direct dependency allowlist)
+        run: |
+          allowed="github.com/golang-jwt/jwt/v5"
+          direct=$(go mod edit -json | jq -r '(.Require // [])[] | select(.Indirect | not) | .Path')
+          fail=0
+          for dep in $direct; do
+            if [ "$dep" != "$allowed" ]; then
+              echo "::error::disallowed direct dependency '$dep'. The only permitted external dependency is '$allowed' (see CONTRIBUTING.md). New dependencies require explicit justification."
+              fail=1
+            fi
+          done
+          exit $fail

@@ -22,7 +22,7 @@ linters-settings:
   goimports:
     local-prefixes: github.com/marckamerbeek/gov-jwt-signer
   misspell:
-    locale: US
+    locale: UK
   gosec:
     excludes:
       # G115: integer overflow conversion is handled elsewhere; not relevant here.
