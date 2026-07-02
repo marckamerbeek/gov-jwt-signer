@@ -49,10 +49,11 @@ func NewVerifier(jwks JWKS, opts ...VerifierOption) (*Verifier, error) {
 		if k.Kid == "" {
 			return nil, fmt.Errorf("jwtsigner: JWK without kid in the set")
 		}
-		v.keys[k.Kid] = k
-		if k.Alg != "" {
-			algSet[k.Alg] = struct{}{}
+		if k.Alg == "" {
+			return nil, fmt.Errorf("%w: kid %q", ErrJWKWithoutAlg, k.Kid)
 		}
+		v.keys[k.Kid] = k
+		algSet[k.Alg] = struct{}{}
 	}
 	for a := range algSet {
 		v.allowedAlgs = append(v.allowedAlgs, a)
@@ -71,9 +72,7 @@ func (v *Verifier) Verify(tokenString string) (jwt.MapClaims, error) {
 	parserOpts := []jwt.ParserOption{
 		jwt.WithExpirationRequired(),
 	}
-	if len(v.allowedAlgs) > 0 {
-		parserOpts = append(parserOpts, jwt.WithValidMethods(v.allowedAlgs))
-	}
+	parserOpts = append(parserOpts, jwt.WithValidMethods(v.allowedAlgs))
 	if v.expectedIssuer != "" {
 		parserOpts = append(parserOpts, jwt.WithIssuer(v.expectedIssuer))
 	}
