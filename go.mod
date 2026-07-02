@@ -1,4 +1,4 @@
-module github.com/cjib/gloo-gateway-extauth-sec
+module github.com/marckamerbeek/gov-jwt-signer
 
 go 1.22
 

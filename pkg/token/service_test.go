@@ -11,46 +11,46 @@ import (
 	"testing"
 	"time"
 
-	extauthsec "github.com/cjib/gloo-gateway-extauth-sec"
-	"github.com/cjib/gloo-gateway-extauth-sec/pkg/claims"
-	"github.com/cjib/gloo-gateway-extauth-sec/pkg/token"
+	jwtsigner "github.com/marckamerbeek/gov-jwt-signer"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
 
-const testIssuer = "https://extauth.cjib.nl"
+const testIssuer = "https://signer.example.org"
 
 // newTestService builds a Signer with a fresh RSA key and a Service around it,
 // plus a Verifier based on the corresponding JWKS.
-func newTestService(t *testing.T) (*token.Service, *extauthsec.Verifier) {
+func newTestService(t *testing.T) (*token.Service, *jwtsigner.Verifier) {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		t.Fatalf("sleutel genereren: %v", err)
+		t.Fatalf("generate key: %v", err)
 	}
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		t.Fatalf("sleutel marshallen: %v", err)
+		t.Fatalf("marshal key: %v", err)
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 
-	signer, err := extauthsec.NewSigner(
-		extauthsec.WithIssuer(testIssuer),
-		extauthsec.WithSigningKeyPEM(pemBytes),
+	signer, err := jwtsigner.NewSigner(
+		jwtsigner.WithIssuer(testIssuer),
+		jwtsigner.WithSigningKeyPEM(pemBytes),
 	)
 	if err != nil {
-		t.Fatalf("signer maken: %v", err)
+		t.Fatalf("create signer: %v", err)
 	}
 	svc, err := token.NewService(signer)
 	if err != nil {
-		t.Fatalf("service maken: %v", err)
+		t.Fatalf("create service: %v", err)
 	}
-	verifier, err := extauthsec.NewVerifier(
+	verifier, err := jwtsigner.NewVerifier(
 		signer.JWKS(),
-		extauthsec.WithExpectedIssuer(testIssuer),
-		extauthsec.WithExpectedAudience("urn:dienst:doel"),
+		jwtsigner.WithExpectedIssuer(testIssuer),
+		jwtsigner.WithExpectedAudience("urn:service:target"),
 	)
 	if err != nil {
-		t.Fatalf("verifier maken: %v", err)
+		t.Fatalf("create verifier: %v", err)
 	}
 	return svc, verifier
 }
@@ -58,7 +58,7 @@ func newTestService(t *testing.T) (*token.Service, *extauthsec.Verifier) {
 func common() token.CommonRequest {
 	return token.CommonRequest{
 		Subject:  "subject-123",
-		Audience: []string{"urn:dienst:doel"},
+		Audience: []string{"urn:service:target"},
 		AMR:      []string{"pwd", "mfa"},
 		AuthTime: time.Unix(1_700_000_000, 0),
 	}
@@ -68,43 +68,107 @@ func common() token.CommonRequest {
 func assertBaseClaims(t *testing.T, c map[string]any, wantType string) {
 	t.Helper()
 	if c["iss"] != testIssuer {
-		t.Errorf("iss = %v, verwacht %v", c["iss"], testIssuer)
+		t.Errorf("iss = %v, expected %v", c["iss"], testIssuer)
 	}
 	if c["sub"] != "subject-123" {
 		t.Errorf("sub = %v", c["sub"])
 	}
-	if c["cjib_token_type"] != wantType {
-		t.Errorf("cjib_token_type = %v, verwacht %v", c["cjib_token_type"], wantType)
+	if c["token_type"] != wantType {
+		t.Errorf("token_type = %v, expected %v", c["token_type"], wantType)
 	}
 	for _, claim := range []string{"exp", "nbf", "iat", "jti", "aud"} {
 		if _, ok := c[claim]; !ok {
-			t.Errorf("verplichte claim %q ontbreekt", claim)
+			t.Errorf("required claim %q is missing", claim)
 		}
 	}
 }
 
-func TestIssueMedewerkersportaal(t *testing.T) {
+// acmeClaims is a consumer-defined payload used to exercise IssueCustom.
+type acmeClaims struct {
+	EmployeeID string   `json:"employee_id"`
+	Roles      []string `json:"roles,omitempty"`
+}
+
+func (p acmeClaims) Validate() error {
+	if p.EmployeeID == "" {
+		return errMissingEmployeeID
+	}
+	return nil
+}
+
+var errMissingEmployeeID = errors.New("employee_id is missing")
+
+func TestIssueCustom(t *testing.T) {
 	svc, verifier := newTestService(t)
-	tok, err := svc.IssueMedewerkersportaal(token.MedewerkersportaalRequest{
+	tok, err := svc.IssueCustom(token.CustomRequest{
 		CommonRequest: common(),
-		Claims: claims.Medewerkersportaal{
+		Type:          "acme-portal",
+		ClaimsKey:     "acme-portal",
+		ACR:           "urn:example:loa:internal",
+		Claims: acmeClaims{
 			EmployeeID: "EMP-007",
-			Roles:      []string{"beheerder"},
+			Roles:      []string{"admin"},
 		},
 	})
 	if err != nil {
-		t.Fatalf("uitgifte: %v", err)
+		t.Fatalf("issue: %v", err)
 	}
 	c, err := verifier.Verify(tok)
 	if err != nil {
-		t.Fatalf("verificatie: %v", err)
+		t.Fatalf("verify: %v", err)
 	}
-	assertBaseClaims(t, c, "medewerkersportaal")
-	if _, ok := c["medewerkersportaal"]; !ok {
-		t.Error("medewerkersportaal-object ontbreekt")
+	assertBaseClaims(t, c, "acme-portal")
+	if c["acr"] != "urn:example:loa:internal" {
+		t.Errorf("acr = %v, expected custom value", c["acr"])
+	}
+	obj, ok := c["acme-portal"].(map[string]any)
+	if !ok {
+		t.Fatalf("acme-portal object is missing or has wrong type: %T", c["acme-portal"])
+	}
+	if obj["employee_id"] != "EMP-007" {
+		t.Errorf("employee_id = %v", obj["employee_id"])
 	}
 	if _, ok := c["eidas"]; ok {
-		t.Error("eidas-object zou afwezig moeten zijn")
+		t.Error("eidas object should be absent")
+	}
+}
+
+func TestIssueCustomValidations(t *testing.T) {
+	svc, _ := newTestService(t)
+
+	// Missing Type.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), ClaimsKey: "x", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrMissingTokenType) {
+		t.Fatalf("expected ErrMissingTokenType, got %v", err)
+	}
+
+	// Claims without ClaimsKey.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrMissingClaimsKey) {
+		t.Fatalf("expected ErrMissingClaimsKey, got %v", err)
+	}
+
+	// ClaimsKey collides with a reserved claim.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", ClaimsKey: "iss", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrReservedClaimsKey) {
+		t.Fatalf("expected ErrReservedClaimsKey for 'iss', got %v", err)
+	}
+
+	// ClaimsKey collides with the token-type claim.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", ClaimsKey: "token_type", Claims: acmeClaims{EmployeeID: "1"},
+	}); !errors.Is(err, token.ErrReservedClaimsKey) {
+		t.Fatalf("expected ErrReservedClaimsKey for token-type claim, got %v", err)
+	}
+
+	// Payload Validate() is honoured.
+	if _, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: common(), Type: "x", ClaimsKey: "acme-portal", Claims: acmeClaims{},
+	}); !errors.Is(err, errMissingEmployeeID) {
+		t.Fatalf("expected validation error from payload, got %v", err)
 	}
 }
 
@@ -121,15 +185,15 @@ func TestIssueEIDAS(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("uitgifte: %v", err)
+		t.Fatalf("issue: %v", err)
 	}
 	c, err := verifier.Verify(tok)
 	if err != nil {
-		t.Fatalf("verificatie: %v", err)
+		t.Fatalf("verify: %v", err)
 	}
 	assertBaseClaims(t, c, "eidas")
 	if c["acr"] != string(claims.LoAHigh) {
-		t.Errorf("acr = %v, verwacht %v", c["acr"], claims.LoAHigh)
+		t.Errorf("acr = %v, expected %v", c["acr"], claims.LoAHigh)
 	}
 }
 
@@ -137,13 +201,13 @@ func TestIssueEIDASRejectsInvalidLoA(t *testing.T) {
 	svc, _ := newTestService(t)
 	_, err := svc.IssueEIDAS(token.EIDASRequest{
 		CommonRequest: common(),
-		LoA:           "http://eidas.europa.eu/LoA/onzin",
+		LoA:           "http://eidas.europa.eu/LoA/nonsense",
 		Person: claims.EIDAS{
 			PersonIdentifier: "NL/NL/123", FamilyName: "X", GivenName: "Y", DateOfBirth: "1990-01-01",
 		},
 	})
 	if !errors.Is(err, claims.ErrInvalidAssuranceLevel) {
-		t.Fatalf("verwacht ErrInvalidAssuranceLevel, kreeg %v", err)
+		t.Fatalf("expected ErrInvalidAssuranceLevel, got %v", err)
 	}
 }
 
@@ -152,20 +216,20 @@ func TestIssueDigiD(t *testing.T) {
 	tok, err := svc.IssueDigiD(token.DigiDRequest{
 		CommonRequest: common(),
 		Claims: claims.DigiD{
-			BSN:                    "123456782",
-			Betrouwbaarheidsniveau: claims.DigiDSubstantieel,
+			BSN:            "123456782",
+			AssuranceLevel: claims.DigiDSubstantieel,
 		},
 	})
 	if err != nil {
-		t.Fatalf("uitgifte: %v", err)
+		t.Fatalf("issue: %v", err)
 	}
 	c, err := verifier.Verify(tok)
 	if err != nil {
-		t.Fatalf("verificatie: %v", err)
+		t.Fatalf("verify: %v", err)
 	}
 	assertBaseClaims(t, c, "digid")
 	if c["acr"] != string(claims.LoASubstantial) {
-		t.Errorf("acr = %v, verwacht afgeleid substantial", c["acr"])
+		t.Errorf("acr = %v, expected derived substantial", c["acr"])
 	}
 }
 
@@ -180,25 +244,27 @@ func TestIssueEHerkenning(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("uitgifte: %v", err)
+		t.Fatalf("issue: %v", err)
 	}
 	c, err := verifier.Verify(tok)
 	if err != nil {
-		t.Fatalf("verificatie: %v", err)
+		t.Fatalf("verify: %v", err)
 	}
 	assertBaseClaims(t, c, "eherkenning")
 	if c["acr"] != string(claims.LoAHigh) {
-		t.Errorf("acr = %v, verwacht afgeleid high", c["acr"])
+		t.Errorf("acr = %v, expected derived high", c["acr"])
 	}
 }
 
 func TestIssueRequiresSubject(t *testing.T) {
 	svc, _ := newTestService(t)
-	_, err := svc.IssueMedewerkersportaal(token.MedewerkersportaalRequest{
-		Claims: claims.Medewerkersportaal{EmployeeID: "EMP-1"},
+	_, err := svc.IssueCustom(token.CustomRequest{
+		Type:      "acme-portal",
+		ClaimsKey: "acme-portal",
+		Claims:    acmeClaims{EmployeeID: "EMP-1"},
 	})
 	if !errors.Is(err, claims.ErrMissingSubject) {
-		t.Fatalf("verwacht ErrMissingSubject, kreeg %v", err)
+		t.Fatalf("expected ErrMissingSubject, got %v", err)
 	}
 }
 
@@ -206,10 +272,10 @@ func TestIssueValidatesVariantClaims(t *testing.T) {
 	svc, _ := newTestService(t)
 	_, err := svc.IssueDigiD(token.DigiDRequest{
 		CommonRequest: common(),
-		Claims:        claims.DigiD{Betrouwbaarheidsniveau: claims.DigiDHoog}, // no BSN/pseudonym
+		Claims:        claims.DigiD{AssuranceLevel: claims.DigiDHoog}, // no BSN/pseudonym
 	})
 	if !errors.Is(err, claims.ErrMissingDigiDIdentifier) {
-		t.Fatalf("verwacht ErrMissingDigiDIdentifier, kreeg %v", err)
+		t.Fatalf("expected ErrMissingDigiDIdentifier, got %v", err)
 	}
 }
 
@@ -218,33 +284,35 @@ func TestIssueValidatesVariantClaims(t *testing.T) {
 func TestVariantsShareIdenticalBase(t *testing.T) {
 	svc, verifier := newTestService(t)
 
-	mtok, err := svc.IssueMedewerkersportaal(token.MedewerkersportaalRequest{
+	mtok, err := svc.IssueCustom(token.CustomRequest{
 		CommonRequest: common(),
-		Claims:        claims.Medewerkersportaal{EmployeeID: "EMP-1"},
+		Type:          "acme-portal",
+		ClaimsKey:     "acme-portal",
+		Claims:        acmeClaims{EmployeeID: "EMP-1"},
 	})
 	if err != nil {
-		t.Fatalf("medewerker uitgifte: %v", err)
+		t.Fatalf("custom issue: %v", err)
 	}
 	dtok, err := svc.IssueDigiD(token.DigiDRequest{
 		CommonRequest: common(),
-		Claims:        claims.DigiD{BSN: "123456782", Betrouwbaarheidsniveau: claims.DigiDHoog},
+		Claims:        claims.DigiD{BSN: "123456782", AssuranceLevel: claims.DigiDHoog},
 	})
 	if err != nil {
-		t.Fatalf("digid uitgifte: %v", err)
+		t.Fatalf("digid issue: %v", err)
 	}
 
 	mc, err := verifier.Verify(mtok)
 	if err != nil {
-		t.Fatalf("medewerker verificatie: %v", err)
+		t.Fatalf("custom verify: %v", err)
 	}
 	dc, err := verifier.Verify(dtok)
 	if err != nil {
-		t.Fatalf("digid verificatie: %v", err)
+		t.Fatalf("digid verify: %v", err)
 	}
 
 	for _, k := range []string{"iss", "sub", "aud"} {
 		if !equalJSON(mc[k], dc[k]) {
-			t.Errorf("basisclaim %q verschilt tussen varianten: %v vs %v", k, mc[k], dc[k])
+			t.Errorf("base claim %q differs between variants: %v vs %v", k, mc[k], dc[k])
 		}
 	}
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-package extauthsec
+package jwtsigner
 
 import (
 	"crypto"
@@ -20,14 +20,15 @@ import (
 // A Signer is immutable after construction and safe for concurrent use by
 // multiple goroutines.
 type Signer struct {
-	key        crypto.Signer
-	method     jwt.SigningMethod
-	algorithm  Algorithm
-	keyID      string
-	issuer     string
-	defaultTTL time.Duration
-	now        func() time.Time
-	jwk        JWK
+	key            crypto.Signer
+	method         jwt.SigningMethod
+	algorithm      Algorithm
+	keyID          string
+	issuer         string
+	defaultTTL     time.Duration
+	now            func() time.Time
+	jwk            JWK
+	tokenTypeClaim string
 }
 
 // NewSigner builds a Signer from the given options. At minimum a signing key
@@ -42,7 +43,7 @@ func NewSigner(opts ...Option) (*Signer, error) {
 	}
 
 	if cfg.issuer == "" {
-		return nil, fmt.Errorf("extauthsec: WithIssuer is verplicht")
+		return nil, fmt.Errorf("jwtsigner: WithIssuer is required")
 	}
 	if len(cfg.keyPEM) == 0 {
 		return nil, ErrNoSigningKey
@@ -67,14 +68,15 @@ func NewSigner(opts ...Option) (*Signer, error) {
 	}
 
 	return &Signer{
-		key:        key,
-		method:     method,
-		algorithm:  cfg.algorithm,
-		keyID:      jwk.Kid,
-		issuer:     cfg.issuer,
-		defaultTTL: cfg.defaultTTL,
-		now:        cfg.now,
-		jwk:        jwk,
+		key:            key,
+		method:         method,
+		algorithm:      cfg.algorithm,
+		keyID:          jwk.Kid,
+		issuer:         cfg.issuer,
+		defaultTTL:     cfg.defaultTTL,
+		now:            cfg.now,
+		jwk:            jwk,
+		tokenTypeClaim: cfg.tokenTypeClaim,
 	}, nil
 }
 
@@ -99,6 +101,10 @@ func (s *Signer) KeyID() string { return s.keyID }
 // DefaultTTL returns the default validity duration.
 func (s *Signer) DefaultTTL() time.Duration { return s.defaultTTL }
 
+// TokenTypeClaim returns the name of the private claim that carries the token
+// type (default "token_type", see WithTokenTypeClaim).
+func (s *Signer) TokenTypeClaim() string { return s.tokenTypeClaim }
+
 // Now returns the current time according to the configured clock.
 func (s *Signer) Now() time.Time { return s.now() }
 
@@ -107,7 +113,7 @@ func (s *Signer) Now() time.Time { return s.now() }
 func (s *Signer) NewJTI() (string, error) {
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {
-		return "", fmt.Errorf("extauthsec: kon geen jti genereren: %w", err)
+		return "", fmt.Errorf("jwtsigner: could not generate jti: %w", err)
 	}
 	return b64u(buf[:]), nil
 }
@@ -152,14 +158,14 @@ func checkKeyMatchesAlgorithm(key crypto.Signer, alg Algorithm) error {
 	switch key.Public().(type) {
 	case *rsa.PublicKey:
 		if !alg.isRSA() {
-			return fmt.Errorf("%w: RSA-sleutel met algoritme %q", ErrKeyAlgorithmMismatch, alg)
+			return fmt.Errorf("%w: RSA key with algorithm %q", ErrKeyAlgorithmMismatch, alg)
 		}
 	case *ecdsa.PublicKey:
 		if !alg.isEC() {
-			return fmt.Errorf("%w: EC-sleutel met algoritme %q", ErrKeyAlgorithmMismatch, alg)
+			return fmt.Errorf("%w: EC key with algorithm %q", ErrKeyAlgorithmMismatch, alg)
 		}
 	default:
-		return fmt.Errorf("%w: onbekend publiek sleuteltype", ErrInvalidKey)
+		return fmt.Errorf("%w: unknown public key type", ErrInvalidKey)
 	}
 	return nil
 }

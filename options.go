@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-package extauthsec
+package jwtsigner
 
 import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 )
 
 // Option configures a Signer via NewSigner.
 type Option func(*config) error
 
 type config struct {
-	issuer     string
-	algorithm  Algorithm
-	keyPEM     []byte
-	keyID      string
-	defaultTTL time.Duration
-	now        func() time.Time
+	issuer         string
+	algorithm      Algorithm
+	keyPEM         []byte
+	keyID          string
+	defaultTTL     time.Duration
+	now            func() time.Time
+	tokenTypeClaim string
 }
 
 func defaultConfig() *config {
@@ -25,9 +28,10 @@ func defaultConfig() *config {
 		// RS256 is the baseline of the NL GOV Assurance profile for OAuth 2.0 and
 		// offers the broadest interoperability within government chains. Override
 		// with WithAlgorithm (PS256 for extra hardening).
-		algorithm:  RS256,
-		defaultTTL: 5 * time.Minute,
-		now:        time.Now,
+		algorithm:      RS256,
+		defaultTTL:     5 * time.Minute,
+		now:            time.Now,
+		tokenTypeClaim: claims.DefaultTokenTypeClaim,
 	}
 }
 
@@ -35,7 +39,7 @@ func defaultConfig() *config {
 func WithIssuer(iss string) Option {
 	return func(c *config) error {
 		if iss == "" {
-			return fmt.Errorf("extauthsec: issuer mag niet leeg zijn")
+			return fmt.Errorf("jwtsigner: issuer must not be empty")
 		}
 		c.issuer = iss
 		return nil
@@ -69,7 +73,7 @@ func WithSigningKeyFile(path string) Option {
 	return func(c *config) error {
 		b, err := os.ReadFile(path) //nolint:gosec // path comes from the calling configuration
 		if err != nil {
-			return fmt.Errorf("extauthsec: kan sleutelbestand niet lezen: %w", err)
+			return fmt.Errorf("jwtsigner: cannot read key file: %w", err)
 		}
 		c.keyPEM = b
 		return nil
@@ -90,9 +94,23 @@ func WithKeyID(kid string) Option {
 func WithDefaultTTL(ttl time.Duration) Option {
 	return func(c *config) error {
 		if ttl <= 0 {
-			return fmt.Errorf("extauthsec: TTL moet positief zijn")
+			return fmt.Errorf("jwtsigner: TTL must be positive")
 		}
 		c.defaultTTL = ttl
+		return nil
+	}
+}
+
+// WithTokenTypeClaim overrides the name of the private claim that carries the
+// token type. It defaults to claims.DefaultTokenTypeClaim ("token_type").
+// Set it to your own collision-resistant namespace (RFC 7519 §4.3) to avoid
+// collisions with other claims, e.g. WithTokenTypeClaim("example_token_type").
+func WithTokenTypeClaim(name string) Option {
+	return func(c *config) error {
+		if name == "" {
+			return fmt.Errorf("jwtsigner: token-type claim must not be empty")
+		}
+		c.tokenTypeClaim = name
 		return nil
 	}
 }
@@ -101,7 +119,7 @@ func WithDefaultTTL(ttl time.Duration) Option {
 func WithClock(now func() time.Time) Option {
 	return func(c *config) error {
 		if now == nil {
-			return fmt.Errorf("extauthsec: klok mag niet nil zijn")
+			return fmt.Errorf("jwtsigner: clock must not be nil")
 		}
 		c.now = now
 		return nil

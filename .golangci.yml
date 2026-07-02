@@ -20,17 +20,17 @@ linters:
 
 linters-settings:
   goimports:
-    local-prefixes: github.com/cjib/gloo-gateway-extauth-sec
+    local-prefixes: github.com/marckamerbeek/gov-jwt-signer
   misspell:
     locale: US
   gosec:
     excludes:
-      # G115: integer overflow conversie wordt elders afgevangen; niet relevant hier.
+      # G115: integer overflow conversion is handled elsewhere; not relevant here.
       - G115
 
 issues:
   exclude-rules:
-    # Tests mogen langere, beschrijvende functies hebben.
+    # Tests may have longer, descriptive functions.
     - path: _test\.go
       linters:
         - gosec

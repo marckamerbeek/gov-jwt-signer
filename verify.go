@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-package extauthsec
+package jwtsigner
 
 import (
 	"crypto/ecdsa"
@@ -47,7 +47,7 @@ func NewVerifier(jwks JWKS, opts ...VerifierOption) (*Verifier, error) {
 	algSet := make(map[string]struct{})
 	for _, k := range jwks.Keys {
 		if k.Kid == "" {
-			return nil, fmt.Errorf("extauthsec: JWK zonder kid in de set")
+			return nil, fmt.Errorf("jwtsigner: JWK without kid in the set")
 		}
 		v.keys[k.Kid] = k
 		if k.Alg != "" {
@@ -92,7 +92,7 @@ func (v *Verifier) keyfunc(token *jwt.Token) (any, error) {
 	kid, _ := token.Header["kid"].(string)
 	jwk, ok := v.keys[kid]
 	if !ok {
-		return nil, fmt.Errorf("extauthsec: geen sleutel voor kid %q", kid)
+		return nil, fmt.Errorf("jwtsigner: no key for kid %q", kid)
 	}
 	return jwk.publicKey()
 }
@@ -145,6 +145,6 @@ func curveFromName(name string) (elliptic.Curve, error) {
 	case "P-521":
 		return elliptic.P521(), nil
 	default:
-		return nil, fmt.Errorf("%w: kromme %q", ErrInvalidKey, name)
+		return nil, fmt.Errorf("%w: curve %q", ErrInvalidKey, name)
 	}
 }

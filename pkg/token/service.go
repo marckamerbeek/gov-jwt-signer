@@ -11,23 +11,46 @@
 package token
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
-	extauthsec "github.com/cjib/gloo-gateway-extauth-sec"
-	"github.com/cjib/gloo-gateway-extauth-sec/pkg/claims"
 	"github.com/golang-jwt/jwt/v5"
+	jwtsigner "github.com/marckamerbeek/gov-jwt-signer"
+	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 )
+
+// Sentinel errors for custom token issuance. Use errors.Is() to match against them.
+var (
+	// ErrMissingTokenType is returned when a CustomRequest has no Type.
+	ErrMissingTokenType = errors.New("token: custom Type is missing")
+
+	// ErrMissingClaimsKey is returned when a CustomRequest carries Claims but no
+	// ClaimsKey to nest them under.
+	ErrMissingClaimsKey = errors.New("token: custom ClaimsKey is missing")
+
+	// ErrReservedClaimsKey is returned when a CustomRequest's ClaimsKey collides
+	// with a reserved top-level claim name (e.g. "iss", "acr", the token-type claim).
+	ErrReservedClaimsKey = errors.New("token: ClaimsKey collides with a reserved claim")
+)
+
+// reservedClaimNames are the top-level claims a custom variant may not overwrite
+// with its ClaimsKey. The configurable token-type claim is checked separately.
+var reservedClaimNames = map[string]struct{}{
+	"iss": {}, "sub": {}, "aud": {}, "exp": {}, "nbf": {}, "iat": {}, "jti": {},
+	"acr": {}, "amr": {}, "auth_time": {},
+}
 
 // Service assembles tokens and signs them.
 type Service struct {
-	signer *extauthsec.Signer
+	signer *jwtsigner.Signer
 }
 
 // NewService creates a Service around a configured Signer.
-func NewService(signer *extauthsec.Signer) (*Service, error) {
+func NewService(signer *jwtsigner.Signer) (*Service, error) {
 	if signer == nil {
-		return nil, fmt.Errorf("token: signer mag niet nil zijn")
+		return nil, fmt.Errorf("token: signer must not be nil")
 	}
 	return &Service{signer: signer}, nil
 }
@@ -46,25 +69,56 @@ type CommonRequest struct {
 	AMR []string
 }
 
-// tokenClaims is the assembled claim set. Thanks to the pointer fields with
-// omitempty, only the relevant variant object appears in the payload.
+// tokenClaims is the assembled claim set for a single token. The standard claims
+// are marshalled at the top level; the token type and the variant object are
+// added under configurable keys by MarshalJSON, so a custom variant can nest its
+// payload under any key without the library knowing the variant in advance.
 type tokenClaims struct {
 	jwt.RegisteredClaims
-	ACR       string           `json:"acr,omitempty"`
-	AMR       []string         `json:"amr,omitempty"`
-	AuthTime  int64            `json:"auth_time,omitempty"`
-	TokenType claims.TokenType `json:"cjib_token_type,omitempty"`
-
-	Medewerkersportaal *claims.Medewerkersportaal `json:"medewerkersportaal,omitempty"`
-	EIDAS              *claims.EIDAS              `json:"eidas,omitempty"`
-	DigiD              *claims.DigiD              `json:"digid,omitempty"`
-	EHerkenning        *claims.EHerkenning        `json:"eherkenning,omitempty"`
+	acr            string
+	amr            []string
+	authTime       int64
+	tokenType      claims.TokenType
+	tokenTypeClaim string // JSON key for the token type
+	variantKey     string // JSON key under which variant is nested ("" => none)
+	variant        any    // variant-specific payload
 }
 
-// MedewerkersportaalRequest is an issuance request for an internal employee token.
-type MedewerkersportaalRequest struct {
-	CommonRequest
-	Claims claims.Medewerkersportaal
+// MarshalJSON assembles the final JWT payload: the standard claims, the token
+// type under its configured claim name, and the variant object under its key.
+func (c tokenClaims) MarshalJSON() ([]byte, error) {
+	type standard struct {
+		jwt.RegisteredClaims
+		ACR      string   `json:"acr,omitempty"`
+		AMR      []string `json:"amr,omitempty"`
+		AuthTime int64    `json:"auth_time,omitempty"`
+	}
+	raw, err := json.Marshal(standard{c.RegisteredClaims, c.acr, c.amr, c.authTime})
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]json.RawMessage{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, err
+	}
+	if c.tokenType != "" {
+		tt, err := json.Marshal(c.tokenType)
+		if err != nil {
+			return nil, err
+		}
+		m[c.tokenTypeClaim] = tt
+	}
+	if c.variantKey != "" && c.variant != nil {
+		if _, exists := m[c.variantKey]; exists {
+			return nil, fmt.Errorf("%w: %q", ErrReservedClaimsKey, c.variantKey)
+		}
+		v, err := json.Marshal(c.variant)
+		if err != nil {
+			return nil, err
+		}
+		m[c.variantKey] = v
+	}
+	return json.Marshal(m)
 }
 
 // EIDASRequest is an issuance request for an eIDAS token.
@@ -86,23 +140,23 @@ type EHerkenningRequest struct {
 	Claims claims.EHerkenning
 }
 
-// IssueMedewerkersportaal issues a signed internal employee token.
-func (s *Service) IssueMedewerkersportaal(req MedewerkersportaalRequest) (string, error) {
-	if err := req.Claims.Validate(); err != nil {
-		return "", err
-	}
-	base, err := s.base(req.CommonRequest)
-	if err != nil {
-		return "", err
-	}
-	c := tokenClaims{
-		RegisteredClaims:   base,
-		AMR:                req.AMR,
-		AuthTime:           authTime(req.AuthTime),
-		TokenType:          claims.TokenTypeMedewerkersportaal,
-		Medewerkersportaal: &req.Claims,
-	}
-	return s.signer.Sign(c)
+// CustomRequest is an issuance request for a caller-defined token variant. It
+// lets consumers of this library issue their own token type without modifying
+// the library: pick a Type (the token-type claim value), a ClaimsKey (the JSON
+// key the payload is nested under) and provide Claims (any JSON-serialisable
+// value). If Claims implements interface{ Validate() error }, it is validated
+// before signing.
+type CustomRequest struct {
+	CommonRequest
+	// Type is the value placed in the token-type claim. Required.
+	Type claims.TokenType
+	// ClaimsKey is the top-level JSON key under which Claims is nested. Required
+	// when Claims is non-nil. It must not collide with a reserved claim name.
+	ClaimsKey string
+	// ACR optionally fills the acr claim (e.g. an eIDAS LoA URI).
+	ACR string
+	// Claims is the variant-specific payload. May be nil for a type-only token.
+	Claims any
 }
 
 // IssueEIDAS issues a signed eIDAS token. The acr claim is filled with the eIDAS
@@ -114,19 +168,7 @@ func (s *Service) IssueEIDAS(req EIDASRequest) (string, error) {
 	if err := req.Person.Validate(); err != nil {
 		return "", err
 	}
-	base, err := s.base(req.CommonRequest)
-	if err != nil {
-		return "", err
-	}
-	c := tokenClaims{
-		RegisteredClaims: base,
-		ACR:              string(req.LoA),
-		AMR:              req.AMR,
-		AuthTime:         authTime(req.AuthTime),
-		TokenType:        claims.TokenTypeEIDAS,
-		EIDAS:            &req.Person,
-	}
-	return s.signer.Sign(c)
+	return s.issue(req.CommonRequest, claims.TokenTypeEIDAS, string(req.LoA), "eidas", &req.Person)
 }
 
 // IssueDigiD issues a signed DigiD token. The acr claim is derived from the DigiD
@@ -135,19 +177,8 @@ func (s *Service) IssueDigiD(req DigiDRequest) (string, error) {
 	if err := req.Claims.Validate(); err != nil {
 		return "", err
 	}
-	base, err := s.base(req.CommonRequest)
-	if err != nil {
-		return "", err
-	}
-	c := tokenClaims{
-		RegisteredClaims: base,
-		ACR:              string(req.Claims.Betrouwbaarheidsniveau.EIDAS()),
-		AMR:              req.AMR,
-		AuthTime:         authTime(req.AuthTime),
-		TokenType:        claims.TokenTypeDigiD,
-		DigiD:            &req.Claims,
-	}
-	return s.signer.Sign(c)
+	acr := string(req.Claims.AssuranceLevel.EIDAS())
+	return s.issue(req.CommonRequest, claims.TokenTypeDigiD, acr, "digid", &req.Claims)
 }
 
 // IssueEHerkenning issues a signed eHerkenning token. The acr claim is derived
@@ -156,19 +187,48 @@ func (s *Service) IssueEHerkenning(req EHerkenningRequest) (string, error) {
 	if err := req.Claims.Validate(); err != nil {
 		return "", err
 	}
-	base, err := s.base(req.CommonRequest)
+	acr := string(req.Claims.AssuranceClass.EIDAS())
+	return s.issue(req.CommonRequest, claims.TokenTypeEHerkenning, acr, "eherkenning", &req.Claims)
+}
+
+// IssueCustom issues a signed token for a caller-defined variant. See CustomRequest.
+func (s *Service) IssueCustom(req CustomRequest) (string, error) {
+	if req.Type == "" {
+		return "", ErrMissingTokenType
+	}
+	if req.Claims != nil && req.ClaimsKey == "" {
+		return "", ErrMissingClaimsKey
+	}
+	if req.ClaimsKey != "" {
+		if _, reserved := reservedClaimNames[req.ClaimsKey]; reserved || req.ClaimsKey == s.signer.TokenTypeClaim() {
+			return "", fmt.Errorf("%w: %q", ErrReservedClaimsKey, req.ClaimsKey)
+		}
+	}
+	if v, ok := req.Claims.(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return "", err
+		}
+	}
+	return s.issue(req.CommonRequest, req.Type, req.ACR, req.ClaimsKey, req.Claims)
+}
+
+// issue is the shared assembly core: it builds the base registered claims and
+// signs a tokenClaims with the given type, acr and (optional) nested variant.
+func (s *Service) issue(common CommonRequest, t claims.TokenType, acr, variantKey string, variant any) (string, error) {
+	base, err := s.base(common)
 	if err != nil {
 		return "", err
 	}
-	c := tokenClaims{
+	return s.signer.Sign(tokenClaims{
 		RegisteredClaims: base,
-		ACR:              string(req.Claims.AssuranceClass.EIDAS()),
-		AMR:              req.AMR,
-		AuthTime:         authTime(req.AuthTime),
-		TokenType:        claims.TokenTypeEHerkenning,
-		EHerkenning:      &req.Claims,
-	}
-	return s.signer.Sign(c)
+		acr:              acr,
+		amr:              common.AMR,
+		authTime:         authTime(common.AuthTime),
+		tokenType:        t,
+		tokenTypeClaim:   s.signer.TokenTypeClaim(),
+		variantKey:       variantKey,
+		variant:          variant,
+	})
 }
 
 // base builds the shared registered claims.

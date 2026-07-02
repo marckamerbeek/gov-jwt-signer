@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-package extauthsec
+package jwtsigner
 
 import (
 	"crypto"
@@ -69,7 +69,7 @@ func (a Algorithm) supported() bool {
 func parsePrivateKeyPEM(pemBytes []byte) (crypto.Signer, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
-		return nil, fmt.Errorf("%w: geen PEM-blok gevonden", ErrInvalidKey)
+		return nil, fmt.Errorf("%w: no PEM block found", ErrInvalidKey)
 	}
 
 	switch block.Type {
@@ -92,7 +92,7 @@ func parsePrivateKeyPEM(pemBytes []byte) (crypto.Signer, error) {
 		}
 		return key, nil
 	default:
-		return nil, fmt.Errorf("%w: onbekend PEM-type %q", ErrInvalidKey, block.Type)
+		return nil, fmt.Errorf("%w: unknown PEM type %q", ErrInvalidKey, block.Type)
 	}
 }
 
@@ -103,7 +103,7 @@ func asSigner(key any) (crypto.Signer, error) {
 	case *ecdsa.PrivateKey:
 		return k, nil
 	default:
-		return nil, fmt.Errorf("%w: sleuteltype %T wordt niet ondersteund", ErrInvalidKey, key)
+		return nil, fmt.Errorf("%w: key type %T is not supported", ErrInvalidKey, key)
 	}
 }
 
@@ -167,7 +167,7 @@ func publicJWK(signer crypto.Signer, alg Algorithm, kid string) (JWK, error) {
 		jwk.Kid = kid
 		return jwk, nil
 	default:
-		return JWK{}, fmt.Errorf("%w: publieke sleutel %T", ErrInvalidKey, pub)
+		return JWK{}, fmt.Errorf("%w: public key %T", ErrInvalidKey, pub)
 	}
 }
 
@@ -180,7 +180,7 @@ func curveParams(c elliptic.Curve) (name string, byteSize int, err error) {
 	case elliptic.P521():
 		return "P-521", 66, nil
 	default:
-		return "", 0, fmt.Errorf("%w: niet-ondersteunde kromme", ErrInvalidKey)
+		return "", 0, fmt.Errorf("%w: non-supported curve", ErrInvalidKey)
 	}
 }
 
