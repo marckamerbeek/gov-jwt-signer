@@ -23,4 +23,8 @@ var (
 	// ErrJWKWithoutAlg is returned when a JWK in the set omits the alg field.
 	// Without alg the verifier cannot enforce an algorithm allowlist.
 	ErrJWKWithoutAlg = errors.New("jwtsigner: JWK without alg in the set")
+
+	// ErrWeakSigningKey is returned when the private key is below the minimum
+	// strength (RSA < 2048 bits, or EC on a non-approved curve).
+	ErrWeakSigningKey = errors.New("jwtsigner: signing key below minimum strength")
 )
