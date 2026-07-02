@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-// Command vault-sign demonstrates how an ExtAuth service fetches the active
+// Command vault-sign demonstrates how an authorization service fetches the active
 // private signing key from the jwks-service Vault layout and uses this library
 // to sign a JWT.
 //
@@ -66,7 +66,7 @@ import (
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/token"
 )
 
-// signingKey is the material the ExtAuth service needs to sign tokens. The public
+// signingKey is the material the authorization service needs to sign tokens. The public
 // key lives in the JWKS published by the jwks-service server, not here.
 type signingKey struct {
 	PrivateKeyPEM []byte

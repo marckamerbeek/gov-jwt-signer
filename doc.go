@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 // Package jwtsigner is the cryptographic core of gov-jwt-signer: a
-// security module for signing JWTs within custom Envoy external authorization
-// (ExtAuth) services.
+// security module for signing JWTs within custom API-gateway authorization
+// services.
 //
 // # Purpose
 //

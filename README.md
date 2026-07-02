@@ -1,7 +1,7 @@
 # gov-jwt-signer
 
-A Go security module for signing JSON Web Tokens (JWTs) inside custom Envoy
-external authorization (ExtAuth) services. The module issues token variants that
+A Go security module for signing JSON Web Tokens (JWTs) inside custom API-gateway
+authorization services. The module issues token variants that
 are identical at their core (same header, same registered claims, same signing)
 and differ only in their domain-specific claims. Three variants are built in:
 
@@ -126,7 +126,7 @@ import (
 func main() {
 	signer, err := jwtsigner.NewSigner(
 		jwtsigner.WithIssuer("https://signer.example.org"),
-		jwtsigner.WithSigningKeyFile("/etc/extauth/signing-key.pem"),
+		jwtsigner.WithSigningKeyFile("/etc/signer/signing-key.pem"),
 		// jwtsigner.WithAlgorithm(jwtsigner.PS256), // optional
 	)
 	if err != nil {
@@ -188,7 +188,7 @@ delegated to a dedicated trust anchor such as
 [jwks-service](https://github.com/sirrapa-it/jwks-service). It manages one shared
 RSA keypair in HashiCorp Vault, rotates it on a schedule, and serves the public
 keys at `/.well-known/jwks.json`. This library is then only the **signer** inside
-the ExtAuth service; verifiers fetch the JWKS from the service, not from
+the authorization service; verifiers fetch the JWKS from the service, not from
 `signer.JWKS()` (which becomes a self-test helper).
 
 The signer obtains its key from Vault rather than from a local file:
