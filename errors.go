@@ -27,4 +27,7 @@ var (
 	// ErrWeakSigningKey is returned when the private key is below the minimum
 	// strength (RSA < 2048 bits, or EC on a non-approved curve).
 	ErrWeakSigningKey = errors.New("jwtsigner: signing key below minimum strength")
+
+	// ErrDuplicateKeyID is returned when a JWKS contains the same kid more than once.
+	ErrDuplicateKeyID = errors.New("jwtsigner: duplicate kid in JWKS")
 )

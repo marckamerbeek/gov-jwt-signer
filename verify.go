@@ -52,6 +52,9 @@ func NewVerifier(jwks JWKS, opts ...VerifierOption) (*Verifier, error) {
 		if k.Alg == "" {
 			return nil, fmt.Errorf("%w: kid %q", ErrJWKWithoutAlg, k.Kid)
 		}
+		if _, exists := v.keys[k.Kid]; exists {
+			return nil, fmt.Errorf("%w: %q", ErrDuplicateKeyID, k.Kid)
+		}
 		v.keys[k.Kid] = k
 		algSet[k.Alg] = struct{}{}
 	}
