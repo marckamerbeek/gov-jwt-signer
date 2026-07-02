@@ -237,6 +237,9 @@ func (s *Service) base(req CommonRequest) (jwt.RegisteredClaims, error) {
 	if req.Subject == "" {
 		return jwt.RegisteredClaims{}, claims.ErrMissingSubject
 	}
+	if len(req.Audience) == 0 {
+		return jwt.RegisteredClaims{}, claims.ErrMissingAudience
+	}
 	now := s.signer.Now()
 	ttl := req.TTL
 	if ttl <= 0 {

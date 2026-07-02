@@ -259,12 +259,26 @@ func TestIssueEHerkenning(t *testing.T) {
 func TestIssueRequiresSubject(t *testing.T) {
 	svc, _ := newTestService(t)
 	_, err := svc.IssueCustom(token.CustomRequest{
-		Type:      "acme-portal",
-		ClaimsKey: "acme-portal",
-		Claims:    acmeClaims{EmployeeID: "EMP-1"},
+		CommonRequest: token.CommonRequest{Audience: []string{"urn:service:target"}},
+		Type:          "acme-portal",
+		ClaimsKey:     "acme-portal",
+		Claims:        acmeClaims{EmployeeID: "EMP-1"},
 	})
 	if !errors.Is(err, claims.ErrMissingSubject) {
 		t.Fatalf("expected ErrMissingSubject, got %v", err)
+	}
+}
+
+func TestIssueRequiresAudience(t *testing.T) {
+	svc, _ := newTestService(t)
+	_, err := svc.IssueCustom(token.CustomRequest{
+		CommonRequest: token.CommonRequest{Subject: "subject-123"},
+		Type:          "acme-portal",
+		ClaimsKey:     "acme-portal",
+		Claims:        acmeClaims{EmployeeID: "EMP-1"},
+	})
+	if !errors.Is(err, claims.ErrMissingAudience) {
+		t.Fatalf("expected ErrMissingAudience, got %v", err)
 	}
 }
 
