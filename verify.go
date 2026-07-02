@@ -128,11 +128,15 @@ func (k JWK) publicKey() (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%w: EC y: %v", ErrInvalidKey, err)
 		}
-		return &ecdsa.PublicKey{
+		pub := &ecdsa.PublicKey{
 			Curve: curve,
 			X:     new(big.Int).SetBytes(x),
 			Y:     new(big.Int).SetBytes(y),
-		}, nil
+		}
+		if !curve.IsOnCurve(pub.X, pub.Y) {
+			return nil, fmt.Errorf("%w: EC point not on curve %q", ErrInvalidKey, k.Crv)
+		}
+		return pub, nil
 	default:
 		return nil, fmt.Errorf("%w: kty %q", ErrInvalidKey, k.Kty)
 	}
