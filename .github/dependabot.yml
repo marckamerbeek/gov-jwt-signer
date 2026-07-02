@@ -1,0 +1,19 @@
+# Keeps dependencies patched so known vulnerabilities are surfaced and fixed
+# automatically. Complements the scanners in .github/workflows/security.yml.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
