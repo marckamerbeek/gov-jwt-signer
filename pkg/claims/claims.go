@@ -13,6 +13,7 @@ import "errors"
 // variants below, callers may supply their own TokenType for custom variants.
 type TokenType string
 
+// Built-in token type claim values.
 const (
 	TokenTypeEIDAS       TokenType = "eidas"
 	TokenTypeDigiD       TokenType = "digid"

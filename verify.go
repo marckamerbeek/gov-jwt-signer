@@ -128,18 +128,43 @@ func (k JWK) publicKey() (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%w: EC y: %v", ErrInvalidKey, err)
 		}
-		pub := &ecdsa.PublicKey{
-			Curve: curve,
-			X:     new(big.Int).SetBytes(x),
-			Y:     new(big.Int).SetBytes(y),
+		enc, err := ecUncompressedPoint(k.Crv, x, y)
+		if err != nil {
+			return nil, err
 		}
-		if !curve.IsOnCurve(pub.X, pub.Y) {
+		pub, err := ecdsa.ParseUncompressedPublicKey(curve, enc)
+		if err != nil {
 			return nil, fmt.Errorf("%w: EC point not on curve %q", ErrInvalidKey, k.Crv)
 		}
 		return pub, nil
 	default:
 		return nil, fmt.Errorf("%w: kty %q", ErrInvalidKey, k.Kty)
 	}
+}
+
+func ecCoordinateByteSize(crv string) (int, error) {
+	switch crv {
+	case "P-256":
+		return 32, nil
+	case "P-384":
+		return 48, nil
+	case "P-521":
+		return 66, nil
+	default:
+		return 0, fmt.Errorf("%w: curve %q", ErrInvalidKey, crv)
+	}
+}
+
+func ecUncompressedPoint(crv string, x, y []byte) ([]byte, error) {
+	size, err := ecCoordinateByteSize(crv)
+	if err != nil {
+		return nil, err
+	}
+	enc := make([]byte, 1+2*size)
+	enc[0] = 0x04
+	copy(enc[1:], leftPad(x, size))
+	copy(enc[1+size:], leftPad(y, size))
+	return enc, nil
 }
 
 func curveFromName(name string) (elliptic.Curve, error) {
