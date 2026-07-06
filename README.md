@@ -107,7 +107,7 @@ jwt, err := svc.IssueCustom(token.CustomRequest{
 go get github.com/marckamerbeek/gov-jwt-signer
 ```
 
-Requires Go 1.22 or newer.
+Requires Go 1.26 or newer.
 
 ## Usage
 

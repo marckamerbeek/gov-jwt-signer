@@ -49,10 +49,14 @@ func NewVerifier(jwks JWKS, opts ...VerifierOption) (*Verifier, error) {
 		if k.Kid == "" {
 			return nil, fmt.Errorf("jwtsigner: JWK without kid in the set")
 		}
-		v.keys[k.Kid] = k
-		if k.Alg != "" {
-			algSet[k.Alg] = struct{}{}
+		if k.Alg == "" {
+			return nil, fmt.Errorf("%w: kid %q", ErrJWKWithoutAlg, k.Kid)
 		}
+		if _, exists := v.keys[k.Kid]; exists {
+			return nil, fmt.Errorf("%w: %q", ErrDuplicateKeyID, k.Kid)
+		}
+		v.keys[k.Kid] = k
+		algSet[k.Alg] = struct{}{}
 	}
 	for a := range algSet {
 		v.allowedAlgs = append(v.allowedAlgs, a)
@@ -71,9 +75,7 @@ func (v *Verifier) Verify(tokenString string) (jwt.MapClaims, error) {
 	parserOpts := []jwt.ParserOption{
 		jwt.WithExpirationRequired(),
 	}
-	if len(v.allowedAlgs) > 0 {
-		parserOpts = append(parserOpts, jwt.WithValidMethods(v.allowedAlgs))
-	}
+	parserOpts = append(parserOpts, jwt.WithValidMethods(v.allowedAlgs))
 	if v.expectedIssuer != "" {
 		parserOpts = append(parserOpts, jwt.WithIssuer(v.expectedIssuer))
 	}
@@ -126,14 +128,43 @@ func (k JWK) publicKey() (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%w: EC y: %v", ErrInvalidKey, err)
 		}
-		return &ecdsa.PublicKey{
-			Curve: curve,
-			X:     new(big.Int).SetBytes(x),
-			Y:     new(big.Int).SetBytes(y),
-		}, nil
+		enc, err := ecUncompressedPoint(k.Crv, x, y)
+		if err != nil {
+			return nil, err
+		}
+		pub, err := ecdsa.ParseUncompressedPublicKey(curve, enc)
+		if err != nil {
+			return nil, fmt.Errorf("%w: EC point not on curve %q", ErrInvalidKey, k.Crv)
+		}
+		return pub, nil
 	default:
 		return nil, fmt.Errorf("%w: kty %q", ErrInvalidKey, k.Kty)
 	}
+}
+
+func ecCoordinateByteSize(crv string) (int, error) {
+	switch crv {
+	case "P-256":
+		return 32, nil
+	case "P-384":
+		return 48, nil
+	case "P-521":
+		return 66, nil
+	default:
+		return 0, fmt.Errorf("%w: curve %q", ErrInvalidKey, crv)
+	}
+}
+
+func ecUncompressedPoint(crv string, x, y []byte) ([]byte, error) {
+	size, err := ecCoordinateByteSize(crv)
+	if err != nil {
+		return nil, err
+	}
+	enc := make([]byte, 1+2*size)
+	enc[0] = 0x04
+	copy(enc[1:], leftPad(x, size))
+	copy(enc[1+size:], leftPad(y, size))
+	return enc, nil
 }
 
 func curveFromName(name string) (elliptic.Curve, error) {

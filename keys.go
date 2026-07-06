@@ -153,13 +153,20 @@ func publicJWK(signer crypto.Signer, alg Algorithm, kid string) (JWK, error) {
 		if err != nil {
 			return JWK{}, err
 		}
+		raw, err := pub.Bytes()
+		if err != nil {
+			return JWK{}, fmt.Errorf("%w: EC public key: %v", ErrInvalidKey, err)
+		}
+		if len(raw) != 1+2*size || raw[0] != 0x04 {
+			return JWK{}, fmt.Errorf("%w: invalid EC public key encoding", ErrInvalidKey)
+		}
 		jwk := JWK{
 			Kty: "EC",
 			Use: "sig",
 			Alg: string(alg),
 			Crv: crv,
-			X:   b64u(leftPad(pub.X.Bytes(), size)),
-			Y:   b64u(leftPad(pub.Y.Bytes(), size)),
+			X:   b64u(raw[1 : 1+size]),
+			Y:   b64u(raw[1+size : 1+2*size]),
 		}
 		if kid == "" {
 			kid = ecThumbprint(jwk.Crv, jwk.X, jwk.Y)

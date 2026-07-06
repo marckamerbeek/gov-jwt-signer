@@ -1,0 +1,47 @@
+%% Threat model diagram for gov-jwt-signer
+%% Render with any Mermaid-compatible viewer (GitHub, VS Code, mermaid.live).
+
+flowchart TB
+    subgraph external["External / Untrusted"]
+        Client["API clients"]
+        Attacker["Attacker"]
+    end
+
+    subgraph issuer_zone["Issuer trust zone"]
+        IdP["Identity provider\n(DigiD / eIDAS / eHerkenning)"]
+        AuthZ["Authorization service"]
+        TokenSvc["pkg/token.Service"]
+        Signer["jwtsigner.Signer"]
+        KeyStore["Vault / HSM\n(private key)"]
+    end
+
+    subgraph publish_zone["Publication zone"]
+        JWKSSvc["jwks-service\n/.well-known/jwks.json"]
+    end
+
+    subgraph consumer_zone["Consumer trust zone"]
+        API["Resource APIs"]
+        Verifier["Downstream JOSE verifier\n(or jwtsigner.Verifier)"]
+    end
+
+    IdP -->|"authenticated identity"| AuthZ
+    AuthZ -->|"Issue* request\n(sub, aud, claims)"| TokenSvc
+    TokenSvc -->|"validated claims"| Signer
+    KeyStore -->|"PEM private key"| Signer
+    Signer -->|"signed JWT"| Client
+    Signer -->|"public JWK"| JWKSSvc
+    Client -->|"Bearer JWT"| API
+    API --> Verifier
+    JWKSSvc -->|"JWKS fetch"| Verifier
+    Verifier -->|"allow / deny"| API
+
+    Attacker -.->|"forged / replayed JWT"| API
+    Attacker -.->|"algorithm confusion"| Verifier
+    Attacker -.->|"stolen private key"| Signer
+
+    classDef trust fill:#e8f5e9,stroke:#2e7d32
+    classDef untrust fill:#ffebee,stroke:#c62828
+    classDef boundary fill:#e3f2fd,stroke:#1565c0
+
+    class Client,Attacker untrust
+    class IdP,AuthZ,TokenSvc,Signer,KeyStore,JWKSSvc,API,Verifier trust

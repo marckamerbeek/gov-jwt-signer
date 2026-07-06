@@ -21,7 +21,7 @@ Two constraints shape almost every decision in this codebase. Please respect the
 
 ## Getting started
 
-Requires **Go 1.22** or newer (matching CI).
+Requires **Go 1.26** or newer (matching CI).
 
 ```sh
 git clone https://github.com/marckamerbeek/gov-jwt-signer.git
@@ -46,7 +46,7 @@ make all        # build + vet + test
 
 4. Open a pull request against `master`.
 
-CI runs vet, build, `go test -race`, and golangci-lint on Go 1.22. A green local
+CI runs vet, build, `go test -race`, and golangci-lint on Go 1.26. A green local
 `make all` is the baseline; `make lint` and `make vuln` are strongly encouraged, as
 CI enforces the linter.
 

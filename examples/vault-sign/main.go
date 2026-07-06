@@ -187,10 +187,10 @@ func readKVv1(ctx context.Context, addr, vaultToken, mount, path string, out any
 	if err != nil {
 		return fmt.Errorf("call Vault: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Vault returned status %d for %s", resp.StatusCode, endpoint)
+		return fmt.Errorf("vault returned status %d for %s", resp.StatusCode, endpoint)
 	}
 
 	var body struct {

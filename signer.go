@@ -5,6 +5,7 @@ package jwtsigner
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -59,6 +60,9 @@ func NewSigner(opts ...Option) (*Signer, error) {
 		return nil, err
 	}
 	if err := checkKeyMatchesAlgorithm(key, cfg.algorithm); err != nil {
+		return nil, err
+	}
+	if err := validateKeyStrength(key); err != nil {
 		return nil, err
 	}
 
@@ -163,6 +167,28 @@ func checkKeyMatchesAlgorithm(key crypto.Signer, alg Algorithm) error {
 	case *ecdsa.PublicKey:
 		if !alg.isEC() {
 			return fmt.Errorf("%w: EC key with algorithm %q", ErrKeyAlgorithmMismatch, alg)
+		}
+	default:
+		return fmt.Errorf("%w: unknown public key type", ErrInvalidKey)
+	}
+	return nil
+}
+
+const minRSABits = 2048
+
+func validateKeyStrength(key crypto.Signer) error {
+	switch pub := key.Public().(type) {
+	case *rsa.PublicKey:
+		if pub.N.BitLen() < minRSABits {
+			return fmt.Errorf("%w: RSA key must be at least %d bits (got %d)",
+				ErrWeakSigningKey, minRSABits, pub.N.BitLen())
+		}
+	case *ecdsa.PublicKey:
+		switch pub.Curve {
+		case elliptic.P256(), elliptic.P384(), elliptic.P521():
+			// approved NIST curves
+		default:
+			return fmt.Errorf("%w: EC curve %s is not approved", ErrWeakSigningKey, pub.Curve.Params().Name)
 		}
 	default:
 		return fmt.Errorf("%w: unknown public key type", ErrInvalidKey)

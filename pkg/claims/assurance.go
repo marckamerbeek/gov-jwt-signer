@@ -8,6 +8,7 @@ package claims
 // Reference).
 type AssuranceLevel string
 
+// Official eIDAS Level of Assurance URIs.
 const (
 	LoALow         AssuranceLevel = "http://eidas.europa.eu/LoA/low"
 	LoASubstantial AssuranceLevel = "http://eidas.europa.eu/LoA/substantial"
@@ -28,6 +29,7 @@ func (a AssuranceLevel) Valid() bool {
 // eToegang (eHerkenning/eIDAS). Source: Afsprakenstelsel eToegang.
 type EHerkenningAssuranceClass string
 
+// Recognised eHerkenning assurance class URIs.
 const (
 	EHLoA2     EHerkenningAssuranceClass = "urn:etoegang:core:assurance-class:loa2"     // EH2  (low)
 	EHLoA2Plus EHerkenningAssuranceClass = "urn:etoegang:core:assurance-class:loa2plus" // EH2+ (low+)
@@ -65,6 +67,7 @@ func (c EHerkenningAssuranceClass) EIDAS() AssuranceLevel {
 // DigiDLevel is a DigiD assurance level (Logius).
 type DigiDLevel string
 
+// Recognised DigiD assurance levels.
 const (
 	DigiDBasis        DigiDLevel = "basis"
 	DigiDMidden       DigiDLevel = "midden"

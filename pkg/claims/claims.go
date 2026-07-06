@@ -13,6 +13,7 @@ import "errors"
 // variants below, callers may supply their own TokenType for custom variants.
 type TokenType string
 
+// Built-in token type claim values.
 const (
 	TokenTypeEIDAS       TokenType = "eidas"
 	TokenTypeDigiD       TokenType = "digid"
@@ -27,6 +28,7 @@ const DefaultTokenTypeClaim = "token_type"
 // Validation errors of the claim structs.
 var (
 	ErrMissingSubject          = errors.New("claims: subject is missing")
+	ErrMissingAudience         = errors.New("claims: audience is missing")
 	ErrMissingPersonIdentifier = errors.New("claims: eIDAS PersonIdentifier is missing")
 	ErrMissingFamilyName       = errors.New("claims: eIDAS CurrentFamilyName is missing")
 	ErrMissingGivenName        = errors.New("claims: eIDAS CurrentGivenName is missing")
