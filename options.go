@@ -21,6 +21,7 @@ type config struct {
 	defaultTTL     time.Duration
 	now            func() time.Time
 	tokenTypeClaim string
+	headerTyp      string
 }
 
 func defaultConfig() *config {
@@ -32,6 +33,7 @@ func defaultConfig() *config {
 		defaultTTL:     5 * time.Minute,
 		now:            time.Now,
 		tokenTypeClaim: claims.DefaultTokenTypeClaim,
+		headerTyp:      "JWT",
 	}
 }
 
@@ -111,6 +113,21 @@ func WithTokenTypeClaim(name string) Option {
 			return fmt.Errorf("jwtsigner: token-type claim must not be empty")
 		}
 		c.tokenTypeClaim = name
+		return nil
+	}
+}
+
+// WithHeaderTyp overrides the JOSE header "typ" placed in every token.
+// It defaults to "JWT". For RFC 9068 JWT access tokens use "at+jwt".
+//
+// The typ is fixed per Signer rather than per request: a Signer issues one kind
+// of token, so verifiers sharing its JWKS never see mixed typ values.
+func WithHeaderTyp(typ string) Option {
+	return func(c *config) error {
+		if typ == "" {
+			return fmt.Errorf("jwtsigner: header typ must not be empty")
+		}
+		c.headerTyp = typ
 		return nil
 	}
 }

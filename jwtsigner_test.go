@@ -94,6 +94,41 @@ func TestSignSetsHeader(t *testing.T) {
 	}
 }
 
+func TestWithHeaderTyp(t *testing.T) {
+	s := newTestSigner(t, WithHeaderTyp("at+jwt"))
+	if s.HeaderTyp() != "at+jwt" {
+		t.Errorf("HeaderTyp() = %q", s.HeaderTyp())
+	}
+	tok, err := s.Sign(minimalClaims{jwt.RegisteredClaims{
+		Subject:   "sub",
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+	}})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	parsed, _, err := jwt.NewParser().ParseUnverified(tok, jwt.MapClaims{})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if parsed.Header["typ"] != "at+jwt" {
+		t.Errorf("typ = %v, want at+jwt", parsed.Header["typ"])
+	}
+
+	if def := newTestSigner(t); def.HeaderTyp() != "JWT" {
+		t.Errorf("default HeaderTyp() = %q, want JWT", def.HeaderTyp())
+	}
+}
+
+func TestWithHeaderTypRejectsEmpty(t *testing.T) {
+	if _, err := NewSigner(
+		WithIssuer("https://issuer.test"),
+		WithSigningKeyPEM(rsaKeyPEM(t)),
+		WithHeaderTyp(""),
+	); err == nil {
+		t.Fatal("expected error for empty header typ")
+	}
+}
+
 func TestKeyAlgorithmMismatch(t *testing.T) {
 	// An EC key with an RSA algorithm must fail.
 	_, err := NewSigner(

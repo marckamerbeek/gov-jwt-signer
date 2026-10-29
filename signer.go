@@ -30,6 +30,7 @@ type Signer struct {
 	now            func() time.Time
 	jwk            JWK
 	tokenTypeClaim string
+	headerTyp      string
 }
 
 // NewSigner builds a Signer from the given options. At minimum a signing key
@@ -81,14 +82,15 @@ func NewSigner(opts ...Option) (*Signer, error) {
 		now:            cfg.now,
 		jwk:            jwk,
 		tokenTypeClaim: cfg.tokenTypeClaim,
+		headerTyp:      cfg.headerTyp,
 	}, nil
 }
 
 // Sign signs the given claims into a compact JWS (a JWT). The protected header
-// contains alg, typ=JWT and kid.
+// contains alg, the configured typ (default JWT, see WithHeaderTyp) and kid.
 func (s *Signer) Sign(claims jwt.Claims) (string, error) {
 	token := jwt.NewWithClaims(s.method, claims)
-	token.Header["typ"] = "JWT"
+	token.Header["typ"] = s.headerTyp
 	token.Header["kid"] = s.keyID
 	return token.SignedString(s.key)
 }
@@ -108,6 +110,10 @@ func (s *Signer) DefaultTTL() time.Duration { return s.defaultTTL }
 // TokenTypeClaim returns the name of the private claim that carries the token
 // type (default "token_type", see WithTokenTypeClaim).
 func (s *Signer) TokenTypeClaim() string { return s.tokenTypeClaim }
+
+// HeaderTyp returns the JOSE header typ placed in every token (default "JWT",
+// see WithHeaderTyp).
+func (s *Signer) HeaderTyp() string { return s.headerTyp }
 
 // Now returns the current time according to the configured clock.
 func (s *Signer) Now() time.Time { return s.now() }
