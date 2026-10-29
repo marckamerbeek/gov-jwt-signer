@@ -18,7 +18,7 @@ lint:
 		golangci-lint run; \
 	else \
 		echo "golangci-lint not found; install v2 with:"; \
-		echo "  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2"; \
+		echo "  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"; \
 	fi
 
 vuln:
