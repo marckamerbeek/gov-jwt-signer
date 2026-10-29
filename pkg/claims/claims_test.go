@@ -7,6 +7,26 @@ import (
 	"testing"
 )
 
+func TestAsTokenType(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  TokenType
+	}{
+		{name: "built-in token type", input: string(TokenTypeEIDAS), want: TokenTypeEIDAS},
+		{name: "custom token type", input: "custom", want: TokenType("custom")},
+		{name: "empty token type", input: "", want: TokenType("")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := AsTokenType(tc.input); got != tc.want {
+				t.Fatalf("AsTokenType(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestEIDASValidate(t *testing.T) {
 	valid := EIDAS{
 		PersonIdentifier: "NL/BE/12345",
