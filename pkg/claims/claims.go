@@ -41,3 +41,11 @@ var (
 	ErrMissingEHAssurance      = errors.New("claims: eHerkenning assurance class is missing")
 	ErrInvalidAssuranceLevel   = errors.New("claims: unknown assurance level")
 )
+
+// AsTokenType converts s to a TokenType.
+//
+// The conversion does not validate whether s is a built-in token type, so it
+// can also be used for custom token type values.
+func AsTokenType(s string) TokenType {
+	return TokenType(s)
+}

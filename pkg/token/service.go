@@ -4,10 +4,12 @@
 // the registered claims and the domain-specific claims and signs them via the
 // Signer.
 //
-// All variants share exactly the same base: the same header (alg, typ, kid), the
-// same registered claims (iss, sub, aud, iat, nbf, exp, jti) and, where
-// applicable, the OIDC claims acr/amr/auth_time. Only the embedded variant object
-// differs.
+// All variants share exactly the same base: the same header (alg, typ, kid; typ
+// is configurable on the Signer, default JWT), the same registered claims (iss,
+// sub, aud, iat, nbf, exp, jti) and, where applicable, the OIDC claims
+// acr/amr/auth_time. Only the embedded variant object differs. The RFC 9068
+// access-token variant (IssueAccessToken) additionally places client_id, scope,
+// roles and the OIDC identity claims at the top level.
 package token
 
 import (
@@ -22,7 +24,8 @@ import (
 	"github.com/marckamerbeek/gov-jwt-signer/pkg/claims"
 )
 
-// Sentinel errors for custom token issuance. Use errors.Is() to match against them.
+// Sentinel errors for custom and access-token issuance. Use errors.Is() to match
+// against them.
 var (
 	// ErrMissingTokenType is returned when a CustomRequest has no Type.
 	ErrMissingTokenType = errors.New("token: custom Type is missing")
@@ -34,13 +37,22 @@ var (
 	// ErrReservedClaimsKey is returned when a CustomRequest's ClaimsKey collides
 	// with a reserved top-level claim name (e.g. "iss", "acr", the token-type claim).
 	ErrReservedClaimsKey = errors.New("token: ClaimsKey collides with a reserved claim")
+
+	// ErrMissingClientID is returned when an AccessTokenRequest has no ClientID.
+	ErrMissingClientID = errors.New("token: access-token ClientID is missing")
 )
 
-// reservedClaimNames are the top-level claims a custom variant may not overwrite
-// with its ClaimsKey. The configurable token-type claim is checked separately.
+// reservedClaimNames are the top-level claims a variant may not overwrite with
+// its ClaimsKey. The configurable token-type claim is checked separately.
 var reservedClaimNames = map[string]struct{}{
 	"iss": {}, "sub": {}, "aud": {}, "exp": {}, "nbf": {}, "iat": {}, "jti": {},
 	"acr": {}, "amr": {}, "auth_time": {},
+	"client_id": {}, "scope": {}, "roles": {},
+	"name": {}, "email": {}, "preferred_username": {},
+	// Registered names with defined semantics in access tokens (RFC 9068
+	// §2.2.3.1, RFC 7519 / OIDC registry) that a nested object must not take.
+	"groups": {}, "entitlements": {}, "azp": {}, "cnf": {}, "sid": {},
+	"given_name": {}, "family_name": {},
 }
 
 // Service assembles tokens and signs them.
@@ -76,13 +88,19 @@ type CommonRequest struct {
 // payload under any key without the library knowing the variant in advance.
 type tokenClaims struct {
 	jwt.RegisteredClaims
-	acr            string
-	amr            []string
-	authTime       int64
-	tokenType      claims.TokenType
-	tokenTypeClaim string // JSON key for the token type
-	variantKey     string // JSON key under which variant is nested ("" => none)
-	variant        any    // variant-specific payload
+	acr               string
+	amr               []string
+	authTime          int64
+	clientID          string
+	scope             string
+	roles             []string
+	name              string
+	email             string
+	preferredUsername string
+	tokenType         claims.TokenType
+	tokenTypeClaim    string // JSON key for the token type
+	variantKey        string // JSON key under which variant is nested ("" => none)
+	variant           any    // variant-specific payload
 }
 
 // MarshalJSON assembles the final JWT payload: the standard claims, the token
@@ -90,11 +108,28 @@ type tokenClaims struct {
 func (c tokenClaims) MarshalJSON() ([]byte, error) {
 	type standard struct {
 		jwt.RegisteredClaims
-		ACR      string   `json:"acr,omitempty"`
-		AMR      []string `json:"amr,omitempty"`
-		AuthTime int64    `json:"auth_time,omitempty"`
+		ACR               string   `json:"acr,omitempty"`
+		AMR               []string `json:"amr,omitempty"`
+		AuthTime          int64    `json:"auth_time,omitempty"`
+		ClientID          string   `json:"client_id,omitempty"`
+		Scope             string   `json:"scope,omitempty"`
+		Roles             []string `json:"roles,omitempty"`
+		Name              string   `json:"name,omitempty"`
+		Email             string   `json:"email,omitempty"`
+		PreferredUsername string   `json:"preferred_username,omitempty"`
 	}
-	raw, err := json.Marshal(standard{c.RegisteredClaims, c.acr, c.amr, c.authTime})
+	raw, err := json.Marshal(standard{
+		RegisteredClaims:  c.RegisteredClaims,
+		ACR:               c.acr,
+		AMR:               c.amr,
+		AuthTime:          c.authTime,
+		ClientID:          c.clientID,
+		Scope:             c.scope,
+		Roles:             c.roles,
+		Name:              c.name,
+		Email:             c.email,
+		PreferredUsername: c.preferredUsername,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +195,35 @@ type CustomRequest struct {
 	Claims any
 }
 
+// AccessTokenRequest is an issuance request for an RFC 9068 JWT access token
+// ("application/at+jwt"). Configure the Signer with
+// jwtsigner.WithHeaderTyp("at+jwt") so the header matches the profile.
+//
+// Unlike the other variants, an access token carries no token-type claim: the
+// at+jwt header typ is the type signal.
+type AccessTokenRequest struct {
+	CommonRequest
+	// ClientID fills the client_id claim (RFC 9068 §2.2). Required.
+	ClientID string
+	// Scope fills the scope claim (space-separated, RFC 8693 syntax). Optional.
+	Scope string
+	// Roles fills the top-level roles claim (RFC 9068 §2.2.3.1 / SCIM). Optional.
+	Roles []string
+	// Name, Email, PreferredUsername fill the corresponding OIDC identity
+	// claims. Optional; empty values are omitted (data minimisation).
+	Name              string
+	Email             string
+	PreferredUsername string
+	// ACR optionally fills the acr claim.
+	ACR string
+	// ClaimsKey/Claims optionally nest a variant object under a top-level key,
+	// exactly as in CustomRequest (e.g. to dual-emit a legacy payload during a
+	// migration). ClaimsKey is required when Claims is non-nil and must not
+	// collide with a reserved claim name.
+	ClaimsKey string
+	Claims    any
+}
+
 // IssueEIDAS issues a signed eIDAS token. The acr claim is filled with the eIDAS
 // LoA URI.
 func (s *Service) IssueEIDAS(req EIDASRequest) (string, error) {
@@ -169,7 +233,12 @@ func (s *Service) IssueEIDAS(req EIDASRequest) (string, error) {
 	if err := req.Person.Validate(); err != nil {
 		return "", err
 	}
-	return s.issue(req.CommonRequest, claims.TokenTypeEIDAS, string(req.LoA), "eidas", &req.Person)
+	return s.issue(req.CommonRequest, tokenClaims{
+		acr:        string(req.LoA),
+		tokenType:  claims.TokenTypeEIDAS,
+		variantKey: "eidas",
+		variant:    &req.Person,
+	})
 }
 
 // IssueDigiD issues a signed DigiD token. The acr claim is derived from the DigiD
@@ -178,8 +247,12 @@ func (s *Service) IssueDigiD(req DigiDRequest) (string, error) {
 	if err := req.Claims.Validate(); err != nil {
 		return "", err
 	}
-	acr := string(req.Claims.AssuranceLevel.EIDAS())
-	return s.issue(req.CommonRequest, claims.TokenTypeDigiD, acr, "digid", &req.Claims)
+	return s.issue(req.CommonRequest, tokenClaims{
+		acr:        string(req.Claims.AssuranceLevel.EIDAS()),
+		tokenType:  claims.TokenTypeDigiD,
+		variantKey: "digid",
+		variant:    &req.Claims,
+	})
 }
 
 // IssueEHerkenning issues a signed eHerkenning token. The acr claim is derived
@@ -188,8 +261,12 @@ func (s *Service) IssueEHerkenning(req EHerkenningRequest) (string, error) {
 	if err := req.Claims.Validate(); err != nil {
 		return "", err
 	}
-	acr := string(req.Claims.AssuranceClass.EIDAS())
-	return s.issue(req.CommonRequest, claims.TokenTypeEHerkenning, acr, "eherkenning", &req.Claims)
+	return s.issue(req.CommonRequest, tokenClaims{
+		acr:        string(req.Claims.AssuranceClass.EIDAS()),
+		tokenType:  claims.TokenTypeEHerkenning,
+		variantKey: "eherkenning",
+		variant:    &req.Claims,
+	})
 }
 
 // IssueCustom issues a signed token for a caller-defined variant. See CustomRequest.
@@ -197,39 +274,73 @@ func (s *Service) IssueCustom(req CustomRequest) (string, error) {
 	if req.Type == "" {
 		return "", ErrMissingTokenType
 	}
-	if req.Claims != nil && req.ClaimsKey == "" {
-		return "", ErrMissingClaimsKey
+	if err := s.checkNested(req.ClaimsKey, req.Claims); err != nil {
+		return "", err
 	}
-	if req.ClaimsKey != "" {
-		if _, reserved := reservedClaimNames[req.ClaimsKey]; reserved || req.ClaimsKey == s.signer.TokenTypeClaim() {
-			return "", fmt.Errorf("%w: %q", ErrReservedClaimsKey, req.ClaimsKey)
-		}
-	}
-	if v, ok := req.Claims.(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return "", err
-		}
-	}
-	return s.issue(req.CommonRequest, req.Type, req.ACR, req.ClaimsKey, req.Claims)
+	return s.issue(req.CommonRequest, tokenClaims{
+		acr:        req.ACR,
+		tokenType:  req.Type,
+		variantKey: req.ClaimsKey,
+		variant:    req.Claims,
+	})
 }
 
-// issue is the shared assembly core: it builds the base registered claims and
-// signs a tokenClaims with the given type, acr and (optional) nested variant.
-func (s *Service) issue(common CommonRequest, t claims.TokenType, acr, variantKey string, variant any) (string, error) {
+// IssueAccessToken issues a signed RFC 9068 JWT access token. client_id, scope,
+// roles and the OIDC identity claims are placed at the top level; empty values
+// are omitted. No token-type claim is emitted. See AccessTokenRequest.
+func (s *Service) IssueAccessToken(req AccessTokenRequest) (string, error) {
+	if req.ClientID == "" {
+		return "", ErrMissingClientID
+	}
+	if err := s.checkNested(req.ClaimsKey, req.Claims); err != nil {
+		return "", err
+	}
+	return s.issue(req.CommonRequest, tokenClaims{
+		acr:               req.ACR,
+		clientID:          req.ClientID,
+		scope:             req.Scope,
+		roles:             req.Roles,
+		name:              req.Name,
+		email:             req.Email,
+		preferredUsername: req.PreferredUsername,
+		variantKey:        req.ClaimsKey,
+		variant:           req.Claims,
+	})
+}
+
+// checkNested validates an optional caller-supplied nested variant: a ClaimsKey
+// is required for non-nil claims, must not collide with a reserved claim, and
+// the claims are validated if they implement interface{ Validate() error }.
+func (s *Service) checkNested(key string, payload any) error {
+	if payload != nil && key == "" {
+		return ErrMissingClaimsKey
+	}
+	if key != "" {
+		if _, reserved := reservedClaimNames[key]; reserved || key == s.signer.TokenTypeClaim() {
+			return fmt.Errorf("%w: %q", ErrReservedClaimsKey, key)
+		}
+	}
+	if v, ok := payload.(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// issue is the shared assembly core: it builds the base registered claims,
+// completes the variant-specific tokenClaims with them and the shared OIDC
+// claims (amr, auth_time), and signs the result.
+func (s *Service) issue(common CommonRequest, tc tokenClaims) (string, error) {
 	base, err := s.base(common)
 	if err != nil {
 		return "", err
 	}
-	return s.signer.Sign(tokenClaims{
-		RegisteredClaims: base,
-		acr:              acr,
-		amr:              common.AMR,
-		authTime:         authTime(common.AuthTime),
-		tokenType:        t,
-		tokenTypeClaim:   s.signer.TokenTypeClaim(),
-		variantKey:       variantKey,
-		variant:          variant,
-	})
+	tc.RegisteredClaims = base
+	tc.amr = common.AMR
+	tc.authTime = authTime(common.AuthTime)
+	tc.tokenTypeClaim = s.signer.TokenTypeClaim()
+	return s.signer.Sign(tc)
 }
 
 // base builds the shared registered claims.

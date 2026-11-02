@@ -3,11 +3,15 @@
 A Go security module for signing JSON Web Tokens (JWTs) inside custom API-gateway
 authorization services. The module issues token variants that
 are identical at their core (same header, same registered claims, same signing)
-and differ only in their domain-specific claims. Three variants are built in:
+and differ only in their domain-specific claims. The following variants are
+built in:
 
 - **eIDAS** — the European standard for cross-border authentication
 - **DigiD** — citizen authentication (Logius)
 - **eHerkenning** — authentication of organisations and acting persons
+- **RFC 9068 access token** — a JWT access token (`typ: at+jwt`) with
+  `client_id`, `scope`, `roles` and OIDC identity claims at the top level (see
+  [RFC 9068 access token](#rfc-9068-access-token))
 
 In addition, consumers of this library can define their **own token type** via
 `IssueCustom`, without modifying the library. This keeps the module free of
@@ -27,6 +31,7 @@ RFC 7638 thumbprint are implemented with the standard library.
 | JWK / JWKS | RFC 7517 |
 | Algorithms | RFC 7518 |
 | JWK Thumbprint (kid) | RFC 7638 |
+| JWT access tokens | RFC 9068 |
 | Authentication Method References (amr) | RFC 8176 |
 | eIDAS minimum data set | eIDAS SAML Attribute Profile (Regulation (EU) 910/2014) |
 | Assurance levels (acr) | eIDAS LoA low/substantial/high |
@@ -53,8 +58,9 @@ jwtsigner/                root package: Signer, Verifier, key and JWKS logic
   allowlist against algorithm confusion, exp/nbf, iss/aud). Intended for
   self-testing and lightweight verification; production verifiers in other
   services use their own JOSE library.
-- `pkg/token.Service` — provides an `Issue...` method per built-in variant plus
-  the generic `IssueCustom` for custom token types.
+- `pkg/token.Service` — provides an `Issue...` method per built-in variant
+  (including `IssueAccessToken` for RFC 9068) plus the generic `IssueCustom` for
+  custom token types.
 
 ### Claim layout
 
@@ -62,7 +68,14 @@ The OIDC standard claims live at the top level (`iss`, `sub`, `aud`, `exp`,
 `nbf`, `iat`, `jti`, and where applicable `acr`, `amr`, `auth_time`). The
 variant-specific data is nested under its own key (`eidas`, `digid`,
 `eherkenning`, or for a custom variant a key chosen by the consumer). The private
-claim `token_type` names the token type explicitly.
+claim `token_type` names the token type explicitly. The RFC 9068 access-token
+variant is the exception: it carries no `token_type` claim (the `at+jwt` header
+`typ` is the type signal) and places its claims at the top level.
+
+The JOSE header is `{alg, typ, kid}`. `typ` defaults to `JWT` and is configurable
+per Signer via `WithHeaderTyp` (e.g. `at+jwt` for RFC 9068). It is deliberately a
+Signer setting rather than a per-request one, so verifiers sharing a JWKS never
+see mixed `typ` values from one issuer key.
 
 The name of that claim is configurable via `WithTokenTypeClaim` (default
 `token_type`), so organisations can use their own collision-resistant namespace
@@ -100,6 +113,52 @@ jwt, err := svc.IssueCustom(token.CustomRequest{
 	Claims:        AcmeClaims{EmployeeID: "00421", Roles: []string{"admin"}},
 })
 ```
+
+### RFC 9068 access token
+
+`IssueAccessToken` issues a JWT access token according to RFC 9068. Configure the
+Signer with `WithHeaderTyp("at+jwt")` so the header matches the profile.
+`client_id` is required; `scope`, `roles`, `name`, `email`,
+`preferred_username` and `acr` are optional and omitted when empty (data
+minimisation). Optionally a variant object can be nested under a `ClaimsKey`,
+exactly as with `IssueCustom`, for example to dual-emit a legacy payload during
+a migration.
+
+```go
+signer, err := jwtsigner.NewSigner(
+	jwtsigner.WithIssuer("https://signer.example.org"),
+	jwtsigner.WithSigningKeyPEM(keyPEM),
+	jwtsigner.WithHeaderTyp("at+jwt"),
+)
+// ...
+svc, err := token.NewService(signer)
+// ...
+at, err := svc.IssueAccessToken(token.AccessTokenRequest{
+	CommonRequest: token.CommonRequest{
+		Subject:  "emp-00421",
+		Audience: []string{"https://api.example.org"},
+		AMR:      []string{"pwd", "mfa"},
+		AuthTime: authenticatedAt,
+	},
+	ClientID:          "portal-frontend",
+	Scope:             "cases:read cases:write",
+	Roles:             []string{"case-handler"},
+	Name:              "Jane Doe",
+	PreferredUsername: "j.doe",
+	ACR:               "http://eidas.europa.eu/LoA/substantial",
+})
+```
+
+The claims `client_id`, `scope`, `roles`, `name`, `email` and
+`preferred_username` are reserved: no variant may use them as `ClaimsKey`. The
+same applies to other registered names with defined semantics in access tokens:
+`groups`, `entitlements` (RFC 9068 §2.2.3.1), `azp`, `cnf`, `sid`, `given_name`
+and `family_name`.
+
+A nested object under a `ClaimsKey` is a private claim (RFC 7519 §4.3). Prefer a
+collision-resistant name when tokens cross organisational boundaries, and keep
+its content minimal: access tokens are readable by whoever holds them
+(RFC 9068 §6).
 
 ## Installation
 
@@ -169,6 +228,13 @@ variant, prints the JWKS and verifies a token can be found in
 
 ```sh
 go run ./examples/basic
+```
+
+An RFC 9068 access token (`typ: at+jwt`), including a dual-emitted nested
+object, is shown in [`examples/access-token`](examples/access-token/main.go):
+
+```sh
+go run ./examples/access-token
 ```
 
 ## Key management

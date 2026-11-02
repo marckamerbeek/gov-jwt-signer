@@ -7,12 +7,16 @@
 // # Purpose
 //
 // The module signs several kinds of tokens that are identical at their core
-// (same header, same set of registered claims, same key and kid) and differ only
-// in their domain-specific claims. Three variants are built in:
+// (same header (alg, typ, kid), same set of registered claims, same key and kid)
+// and differ only in their domain-specific claims. The header typ is
+// configurable per Signer via WithHeaderTyp (default "JWT"). The following
+// variants are built in:
 //
 //   - eIDAS  (EU interoperability; Regulation (EU) 910/2014)
 //   - DigiD  (Logius; citizen authentication)
 //   - eHerkenning (Afsprakenstelsel eToegang; organisation authentication)
+//   - RFC 9068 JWT access token (token package's IssueAccessToken; use with
+//     WithHeaderTyp("at+jwt"))
 //
 // Consumers can additionally issue their own token variant via the token
 // package's IssueCustom, so organisation-specific types live in the calling
@@ -28,6 +32,7 @@
 //   - RFC 7517  JSON Web Key (JWK / JWKS)
 //   - RFC 7518  JSON Web Algorithms (JWA)
 //   - RFC 7638  JWK Thumbprint (used as kid)
+//   - RFC 9068  JWT Profile for OAuth 2.0 Access Tokens
 //   - eIDAS SAML Attribute Profile (minimum data set, LoA URIs)
 //
 // # Architecture
